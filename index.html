@@ -1053,6 +1053,7 @@ async function addFiles(files) {
   const list = [...files].filter(f => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name));
   if (!list.length) { if (![...files].some(f => /\.json$/i.test(f.name))) toast('Izberi datoteko PDF.'); return; }
   for (const f of list) await addFile(f);
+  unlockNotes();
 }
 async function addFile(f) {
   const id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -1660,6 +1661,29 @@ async function importNotesPack(file) {
     let n = 0; for (const [k, v] of Object.entries(pack.songs)) { if (v && v.ev && v.ev.length) { S.notes[k] = v; n++; } }
     await saveNotes(); render(); toast(`Uvoženih not za ${n} pesmi`);
   } catch { toast('To ni paket not za pesmarico'); }
+}
+/* note v aplikaciji so šifrirane; ključ je SHA-256 tvojega PDF-ja pesmarice, zato jih odklene le, kdor ima knjigo */
+const b64u8 = t => Uint8Array.from(atob(t), c => c.charCodeAt(0));
+let unlocking = null;
+function unlockNotes() { if (!unlocking) unlocking = doUnlock().finally(() => { unlocking = null; }); return unlocking; }
+async function doUnlock() {
+  const docs = S.docs.filter(d => d.book && d.status === 'ready'); if (!docs.length || !crypto.subtle) return;
+  let pack; try { const r = await fetch('notes-enc.json', { cache: 'no-cache' }); if (!r.ok) return; pack = await r.json(); } catch { return; }
+  const seen = S.settings.notesVer || {}; let n = 0, changed = false;
+  for (const d of docs) {
+    const e = pack.books && pack.books[d.book]; if (!e) continue;
+    if (seen[d.id] === e.ver) continue;
+    try {
+      const blob = memFiles.get(d.id) || await DB.get('files', d.id); if (!blob) continue;
+      const raw = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+      const key = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
+      const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64u8(e.iv) }, key, b64u8(e.data));
+      const txt = await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+      for (const [k, v] of Object.entries(JSON.parse(txt))) { const cur = S.notes[k]; if (!cur || cur.src !== 'file') { S.notes[k] = v; n++; } }
+      seen[d.id] = e.ver; changed = true;
+    } catch (err) { console.warn('Note za knjigo', d.book, 'se niso odklenile', err); }
+  }
+  if (changed) { S.settings.notesVer = seen; saveMeta(); await saveNotes(); render(); if (n) toast(`Note pripravljene za ${Object.keys(S.notes).length} pesmi`); }
 }
 async function saveNotes() { try { await DB.put('meta', 'notes', S.notes); } catch { storageFailed(); } }
 
@@ -2391,7 +2415,7 @@ async function boot() {
     if (!S.settings.secDef1) { S.sort = 'sec'; S.settings.secDef1 = 1; }
   }
   if (location.hash === '#beri') location.hash = '';
-  buildSongs(); render();
+  buildSongs(); render(); unlockNotes();
   try { navigator.storage?.persist?.().catch(() => {}); } catch {}
   if (!window.pdfjsLib) toast('Pregledovalnik PDF se ni naložil. Preveri povezavo in osveži stran.');
 }

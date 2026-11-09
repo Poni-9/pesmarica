@@ -1,5 +1,5 @@
 // Pesmarica: service worker, da aplikacija deluje brez interneta.
-const CACHE = 'pesmarica-v7';
+const CACHE = 'pesmarica-v8';
 const CORE = ['./', './index.html', './manifest.webmanifest', './pdf.min.js', './pdf.worker.min.js', './pdf-lib.min.js', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -16,6 +16,11 @@ self.addEventListener('fetch', e => {
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req).then(r => { const copy = r.clone(); caches.open(CACHE).then(c => c.put('./index.html', copy)); return r; })
       .catch(() => caches.match('./index.html')));
+    return;
+  }
+  // note: najprej omrežje (da pridejo nove), sicer predpomnilnik
+  if (url.origin === location.origin && url.pathname.endsWith('notes-enc.json')) {
+    e.respondWith(fetch(req).then(r => { if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(req, copy)); } return r; }).catch(() => caches.match(req)));
     return;
   }
   // ostalo (pdf.js, ikone, pisave): najprej predpomnilnik
