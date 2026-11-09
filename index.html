@@ -369,6 +369,7 @@ button { cursor: pointer; }
       <div class="grp"><button class="sb" data-tr="-1" aria-label="Nižje za pol tona">−</button><span>tonovsko<b id="pl-tr">0</b></span><button class="sb" data-tr="1" aria-label="Višje za pol tona">+</button></div>
       <div class="grp" aria-label="Glasovi"><button class="vb" data-voice="0">S</button><button class="vb" data-voice="1">A</button><button class="vb" data-voice="2">T</button><button class="vb" data-voice="3">B</button></div>
       <button class="sb" id="pl-loop" aria-label="Ponavljaj" aria-pressed="false">⟳</button>
+      <button class="sb" id="pl-follow" aria-label="Ob listanju samodejno zaigraj naslednjo pesem" title="Ob listanju samodejno zaigraj pesem na novi strani" aria-pressed="true">⇥</button>
     </div>
     <div class="pl-src pl-has" id="pl-src"></div>
   </div>
@@ -1672,6 +1673,7 @@ function plUi() {
   const tr = plTr(); $('#pl-tr').textContent = tr ? (tr > 0 ? '+' + tr : String(tr)) : '0';
   document.querySelectorAll('#playerbar [data-voice]').forEach(b => { const v = +b.dataset.voice; b.hidden = v >= (d.voices || 4); b.setAttribute('aria-pressed', voiceOn(v)); b.classList.toggle('solo', S.settings.solo === v); });
   $('#pl-loop').setAttribute('aria-pressed', !!S.settings.loop);
+  $('#pl-follow').setAttribute('aria-pressed', S.settings.follow !== false);
   $('#pl-src').textContent = d.src === 'omr' ? `Prebrano samodejno iz not${d.bad ? ` · ${d.bad} ${d.bad === 1 ? 'takt' : 'taktov'} morda napačnih` : ''}` : d.src === 'file' ? 'Iz tvoje datoteke MusicXML' : '';
 }
 function openPlayer(s) {
@@ -2417,6 +2419,16 @@ function updateChrome() {
   $('#r-slider').value = R.page;
   $('#r-spread').setAttribute('aria-pressed', S.settings.spread);
   updatePlanBar();
+  followPage(vs, s);
+}
+// ob listanju predvajalnik sledi pesmi na novi strani in jo samodejno zaigra
+function followPage(vs, s) {
+  if ($('#playerbar').hidden || S.settings.follow === false || !PL.song) return;
+  const cands = vs.length ? vs : s ? [s] : [];
+  if (!cands.length || cands.some(x => x.key === PL.song.key)) return;
+  const next = cands.find(x => notesFor(x)) || cands[0];
+  openPlayer(next);
+  if (PL.data) { PL.pos = 0; plStart(0); }
 }
 function showChrome() {
   reader.classList.remove('quiet');
@@ -2685,6 +2697,7 @@ $('#pl-close').addEventListener('click', () => { closePlayer(); showChrome(); })
 $('#pl-play').addEventListener('click', () => { if (!PL.data) return; if (PL.playing) plPause(); else { if (PL.pos >= PL.data.len - 0.01) PL.pos = 0; plStart(PL.pos); } showChrome(); });
 $('#pl-seek').addEventListener('input', e => { if (!PL.data) return; const p = +e.target.value; if (PL.playing) plSeek(p); else { PL.pos = p; plUi(); } });
 $('#pl-loop').addEventListener('click', () => { S.settings.loop = !S.settings.loop; saveMeta(); plUi(); });
+$('#pl-follow').addEventListener('click', () => { S.settings.follow = S.settings.follow === false; saveMeta(); plUi(); toast(S.settings.follow ? 'Ob listanju se zaigra pesem na novi strani' : 'Ob listanju predvajanje ostane pri tej pesmi'); });
 $('#pl-load').addEventListener('click', () => $('#xmlfile').click());
 ['#zcam', '#zfile'].forEach(sel => $(sel).addEventListener('change', e => { const fs = [...(e.target.files || [])]; e.target.value = ''; zAddFiles(fs); }));
 window.addEventListener('online', () => zPoll());
