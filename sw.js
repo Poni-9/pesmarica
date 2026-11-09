@@ -1,5 +1,5 @@
 // Pesmarica: service worker, da aplikacija deluje brez interneta.
-const CACHE = 'pesmarica-v8';
+const CACHE = 'pesmarica-v9';
 const CORE = ['./', './index.html', './manifest.webmanifest', './pdf.min.js', './pdf.worker.min.js', './pdf-lib.min.js', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

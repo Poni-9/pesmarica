@@ -174,6 +174,17 @@ button { cursor: pointer; }
 .playerbar.nodata .pl-has { display: none; }
 .playerbar .pl-none .btn { margin-top: 8px; background: rgba(255,255,255,.08); color: var(--glass-ink); border-color: rgba(255,255,255,.2); min-height: 42px; }
 #reader.playing .penbar { display: none; }
+.zb-add { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 6px; }
+.zb-add .btn svg { width: 20px; height: 20px; margin-right: 6px; vertical-align: -4px; }
+.hint-p { color: var(--muted); margin: 4px 0 8px; font-size: 15px; }
+.zcrop { position: fixed; inset: 0; z-index: 60; background: #0d0f14; color: #f3efe6; display: grid; grid-template-rows: auto 1fr auto; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.zcrop .zc-top { padding: 12px 16px; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; } .zcrop .zc-top span { opacity: .7; font-size: 14px; }
+.zcrop .zc-stage { position: relative; display: grid; place-items: center; min-height: 0; overflow: hidden; padding: 10px; }
+.zcrop .zc-stage canvas, .zcrop .zc-stage svg { grid-area: 1 / 1; } .zcrop .zc-stage svg { touch-action: none; }
+.zcrop .zc-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: flex-end; padding: 10px 14px 14px; background: #151821; }
+.zcrop .zc-bar .btn { background: rgba(255,255,255,.08); color: #f3efe6; border-color: rgba(255,255,255,.18); min-height: 46px; }
+.zcrop .zc-bar .btn.primary { background: #d9b46c; color: #1b1608; border-color: #d9b46c; }
+.zcrop .zc-enh { display: flex; gap: 8px; align-items: center; margin-right: auto; font-size: 15px; } .zcrop .zc-enh input { width: 22px; height: 22px; accent-color: #d9b46c; }
 .secs { display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; }
 .sec-part { margin: 14px 0 0; font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
 .sec { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; }
@@ -316,6 +327,7 @@ button { cursor: pointer; }
         <button class="tab" role="tab" id="tab-all" data-tab="all" aria-selected="true">Vse pesmi <span class="cnt" id="cnt-all"></span></button>
         <button class="tab" role="tab" id="tab-fav" data-tab="fav" aria-selected="false">Priljubljene <span class="cnt" id="cnt-fav"></span></button>
         <button class="tab" role="tab" id="tab-mass" data-tab="mass" aria-selected="false">Maša</button>
+        <button class="tab" role="tab" id="tab-zbor" data-tab="zbor" aria-selected="false">Zbor</button>
         <button class="tab" role="tab" id="tab-books" data-tab="books" aria-selected="false">Knjige in nastavitve</button>
       </div>
     </div>
@@ -375,6 +387,8 @@ button { cursor: pointer; }
 </div>
 
 <input type="file" id="file" accept="application/pdf,.pdf,.json,application/json" multiple hidden>
+<input type="file" id="zcam" accept="image/*" capture="environment" multiple hidden>
+<input type="file" id="zfile" accept="image/*,application/pdf,.pdf" multiple hidden>
 <input type="file" id="notesfile" accept=".json,application/json" multiple hidden>
 <input type="file" id="xmlfile" accept=".musicxml,.xml,.mxl,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml" hidden>
 <div id="modal-root"></div>
@@ -955,7 +969,7 @@ const LS = {
 /* ---------------- state ---------------- */
 const S = {
   docs: [], songs: [], favs: new Set(), recent: [],
-  tab: 'all', q: '', sort: 'sec', limit: 200, openSecs: new Set(), plans: [], planId: null, play: null, counts: {}, notes: {},
+  tab: 'all', q: '', sort: 'sec', limit: 200, openSecs: new Set(), plans: [], planId: null, play: null, counts: {}, notes: {}, sets: [], setId: null,
   settings: { autoFs: false, spread: false, keepAwake: true, hint: true, tool: 'pen:#16161a' },
   storageOK: true,
 };
@@ -963,7 +977,7 @@ const memFiles = new Map();
 const pdfCache = new Map();
 
 async function saveMeta() {
-  const data = { favs: [...S.favs], recent: S.recent, settings: S.settings, sort: S.sort, plans: S.plans, counts: S.counts };
+  const data = { favs: [...S.favs], recent: S.recent, settings: S.settings, sort: S.sort, plans: S.plans, counts: S.counts, sets: S.sets };
   LS.set('meta', data);
   try { await DB.put('meta', 'main', data); } catch {}
 }
@@ -976,7 +990,8 @@ const bookDoc = b => S.docs.find(d => d.book === b) || null;
 function buildSongs() {
   const list = [];
   for (const [num, title, comp, book, page, y] of CATALOG) list.push({ key: 'c:' + num, num, title, comp, book, page, y: y || 0, src: 'cat' });
-  for (const d of S.docs) for (const s of d.songs || []) {
+  for (const d of S.docs.filter(d => d.zbor)) list.push({ key: 'z:' + d.id, num: '', title: d.name, comp: d.comp || '', docId: d.id, book: null, page: 1, y: 0, src: 'zbor' });
+  for (const d of S.docs.filter(d => !d.zbor)) for (const s of d.songs || []) {
     list.push({ key: 'm:' + d.id + ':' + s.page + ':' + norm(s.title).slice(0, 24), num: '', title: s.title, comp: s.src === 'auto' ? 'najdeno v PDF' : 'dodano ročno', docId: d.id, book: d.book, page: s.page, y: 0, src: s.src });
   }
   for (const s of list) { s.n = norm(s.title); s.cn = norm(s.comp); s.nv = parseInt(s.num, 10) || 0; }
@@ -995,6 +1010,7 @@ function search(q) {
   const isNum = /^\d+$/.test(nq);
   const res = [];
   for (const s of S.songs) {
+    if (s.src === 'zbor') continue;
     let score = -1;
     if (isNum && s.num) {
       const [a, b] = s.num.split('-').map(Number); const v = +nq;
@@ -1158,7 +1174,7 @@ const secOf = s => { const v = s.nv; if (!v) return -1; return SECTIONS.findInde
 const ICON_CHEV = '<svg class="sec-c" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 function sectionsHtml() {
   const groups = SECTIONS.map(() => []), other = [];
-  for (const s of S.songs) { const i = secOf(s); (i < 0 ? other : groups[i]).push(s); }
+  for (const s of S.songs) { if (s.src === 'zbor') continue; const i = secOf(s); (i < 0 ? other : groups[i]).push(s); }
   const byNum = (a, b) => a.nv - b.nv || coll.compare(a.title, b.title);
   const block = (key, title, items) => {
     items.sort(byNum);
@@ -1239,7 +1255,7 @@ function popularHtml() {
   const se = season(new Date());
   const pops = S.songs.filter(isPop);
   const seas = se.secs.length ? pops.filter(s => inSecs(s, se.secs)) : [];
-  const mine = S.songs.filter(s => usage(s) >= 2).sort((a, b) => usage(b) - usage(a)).slice(0, 10);
+  const mine = S.songs.filter(s => s.src !== 'zbor' && usage(s) >= 2).sort((a, b) => usage(b) - usage(a)).slice(0, 10);
   const pick = [...seas, ...pops.filter(s => !seas.includes(s))].slice(0, 14);
   const card = (s, extra) => `<button data-open="${esc(s.key)}"><span class="n">${numLabel(s.num) || '·'}</span><span class="t">${esc(s.title)}</span><span class="pc">${extra}</span></button>`;
   let h = '';
@@ -1339,23 +1355,32 @@ function openPicker(pl, slotId) {
     });
   });
 }
+function playSeq() {
+  if (!S.play) return [];
+  if (S.play.kind === 'set') { const st = S.sets.find(x => x.id === S.play.id); return st ? st.items.filter(k => songByKey(k)).map((k, i) => ({ slot: { t: 'Nastop ' + (i + 1) + '.' }, key: k })) : []; }
+  const pl = S.plans.find(p => p.id === S.play.id); return pl ? planSeq(pl) : [];
+}
+function playSet(st, at = 0) {
+  const n = st.items.filter(k => songByKey(k)).length; if (!n) return;
+  S.play = { kind: 'set', id: st.id, idx: Math.min(at, n - 1) };
+  const s = songByKey(playSeq()[S.play.idx].key); if (s) openSong(s);
+}
 function playPlan(pl, at = 0) {
   const seq = planSeq(pl); if (!seq.length) return;
-  S.play = { id: pl.id, idx: Math.min(at, seq.length - 1) };
+  S.play = { kind: 'plan', id: pl.id, idx: Math.min(at, seq.length - 1) };
   const s = songByKey(seq[S.play.idx].key); if (s) openSong(s);
 }
 function planStep(d) {
   if (!S.play) return;
-  const pl = S.plans.find(p => p.id === S.play.id); if (!pl) return;
-  const seq = planSeq(pl); const i = S.play.idx + d;
-  if (i < 0 || i >= seq.length) { toast(i < 0 ? 'To je prva pesem razporeda' : 'Konec razporeda'); return; }
+  const seq = playSeq(); if (!seq.length) return; const i = S.play.idx + d;
+  if (i < 0 || i >= seq.length) { toast(i < 0 ? 'To je prva skladba' : 'Konec'); return; }
   S.play.idx = i; const s = songByKey(seq[i].key); if (s) openSong(s, true);
 }
 function updatePlanBar() {
   const on = !!(S.play && R.open);
   reader.classList.toggle('inplan', on);
   if (!on) return;
-  const pl = S.plans.find(p => p.id === S.play.id); const seq = pl ? planSeq(pl) : [];
+  const seq = playSeq();
   const cur = seq[S.play.idx], nx = seq[S.play.idx + 1];
   $('#r-plan-next').textContent = nx ? `${nx.slot.t} ›` : 'Konec';
   $('#r-plan-next').disabled = !nx;
@@ -1573,6 +1598,7 @@ function audio() {
     // orgelski zvok: osnovni ton + oktava + kvinta (8' + 4' + 2 2/3')
     const real = new Float32Array([0, 1, 0.55, 0.28, 0.22, 0.08, 0.06, 0, 0.04]); const imag = new Float32Array(real.length);
     PL.wave = PL.ctx.createPeriodicWave(real, imag);
+    const pr = new Float32Array([0, 1, 0.42, 0.2, 0.12, 0.07, 0.04, 0.02]); PL.piano = PL.ctx.createPeriodicWave(pr, new Float32Array(pr.length));
     const comp = PL.ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 3;
     PL.master = PL.ctx.createGain(); PL.master.gain.value = 0.55; PL.master.connect(comp); comp.connect(PL.ctx.destination);
   }
@@ -1586,15 +1612,23 @@ const beatSec = () => 60 / plBpm();
 function curPos() { return PL.playing ? PL.p0 + (PL.ctx.currentTime - PL.t0) / beatSec() : PL.pos; }
 function playNote(midi, when, dur, v) {
   const ctx = PL.ctx; const f = 440 * Math.pow(2, (midi + plTr() - 69) / 12);
-  const o = ctx.createOscillator(); o.setPeriodicWave(PL.wave); o.frequency.value = f;
+  const piano = PL.data && PL.data.inst === 'piano';
+  const o = ctx.createOscillator(); o.setPeriodicWave(piano ? PL.piano : PL.wave); o.frequency.value = f;
   const g = ctx.createGain(); const solo = S.settings.solo;
   const vol = (solo != null ? (v === solo ? 0.34 : 0.1) : (v === 0 ? 0.26 : 0.19)) / Math.max(1, (PL.data.voices || 4) / 3);
   const end = when + Math.max(0.06, dur - 0.025);
-  g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(vol, when + 0.025);
-  g.gain.setValueAtTime(vol, end); g.gain.linearRampToValueAtTime(0, end + 0.07);
+  if (piano) { // klavir: hiter udarec, nato pojemanje
+    const dec = Math.max(0.6, 2.6 - (midi - 48) * 0.03);
+    g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(vol * 1.5, when + 0.006);
+    g.gain.setTargetAtTime(vol * 0.35, when + 0.01, dec * 0.18); g.gain.setTargetAtTime(0.0001, when + 0.25, dec);
+    g.gain.setTargetAtTime(0, end, 0.06);
+  } else {
+    g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(vol, when + 0.025);
+    g.gain.setValueAtTime(vol, end); g.gain.linearRampToValueAtTime(0, end + 0.07);
+  }
   const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
   if (pan) { pan.pan.value = [-0.25, -0.08, 0.08, 0.25][v] || 0; o.connect(g); g.connect(pan); pan.connect(PL.master); } else { o.connect(g); g.connect(PL.master); }
-  o.start(when); o.stop(end + 0.1); PL.nodes.add(o); o.onended = () => PL.nodes.delete(o);
+  o.start(when); o.stop(end + (piano ? 0.4 : 0.1)); PL.nodes.add(o); o.onended = () => PL.nodes.delete(o);
 }
 function schedule() {
   const ctx = PL.ctx, ahead = ctx.currentTime + 0.35, ev = PL.data.ev, bs = beatSec();
@@ -1687,6 +1721,298 @@ async function doUnlock() {
 }
 async function saveNotes() { try { await DB.put('meta', 'notes', S.notes); } catch { storageFailed(); } }
 
+/* ================= ZBOR: slikane note, branje prek GitHuba, nastopi ================= */
+const isZbor = s => s && s.src === 'zbor';
+const zborDocs = () => S.docs.filter(d => d.zbor);
+const zSong = d => S.songs.find(s => s.key === 'z:' + d.id);
+const ICON_CAM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+function zStatus(d) {
+  const o = d.omr || {}; const has = !!S.notes['z:' + d.id];
+  if (has) return '♪ note pripravljene';
+  if (!(S.settings.gh || {}).token) return 'branje not ni nastavljeno';
+  return { up: 'nalagam za branje …', wait: 'berem note (2–4 min) …', err: 'not ni bilo mogoče prebrati', none: 'čaka na internet' }[o.state] || 'čaka na internet';
+}
+function zRow(s) {
+  const d = songDoc(s); if (!d) return '';
+  return `<li class="row"><button class="row-main" data-open="${esc(s.key)}"><span class="num">♪</span>
+    <span class="tt"><b>${esc(s.title)}</b><span>${s.comp ? esc(s.comp) + ' · ' : ''}${d.pages} ${d.pages === 1 ? 'stran' : 'strani'} · ${esc(zStatus(d))}</span></span></button>
+    <button class="star" data-zmenu="${d.id}" aria-label="Možnosti za ${esc(s.title)}"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></li>`;
+}
+function zborHtml() {
+  if (S.setId) { const st = S.sets.find(x => x.id === S.setId); if (st) return setEditorHtml(st); S.setId = null; }
+  const docs = zborDocs(); const q = norm(S.q || '');
+  let h = `<div class="section-head"><h2>Note za zbor<em>${docs.length}</em></h2></div>
+    <div class="zb-add"><button class="btn primary" data-zadd="cam">${ICON_CAM}Slikaj note</button><button class="btn" data-zadd="file">Dodaj slike ali PDF</button><button class="btn" data-zsetup>${(S.settings.gh || {}).token ? 'Branje not: nastavljeno' : 'Nastavi branje not'}</button></div>`;
+  if (!docs.length) h += `<div class="empty"><strong>Še ni not za zbor</strong>Tapni »Slikaj note«. Aplikacija sliko obreže in izboljša, note se preberejo same, ko je internet, in jih lahko poslušaš s klavirjem.</div>`;
+  const rec = S.recent.map(k => S.songs.find(s => s.key === k)).filter(isZbor).slice(0, 10);
+  if (rec.length && !q) h += `<div class="section-head"><h2>Nazadnje uporabljene</h2></div><div class="recent">${rec.map(s => `<button data-open="${esc(s.key)}"><span class="n">♪</span><span class="t">${esc(s.title)}</span></button>`).join('')}</div>`;
+  if (!q) h += setsHtml();
+  let list = docs.map(zSong).filter(Boolean);
+  if (q) list = list.filter(s => s.n.includes(q) || (s.cn || '').includes(q));
+  list.sort((a, b) => coll.compare(a.title, b.title));
+  if (docs.length) h += `<div class="section-head"><h2>${q ? 'Zadetki' : 'Vse skladbe'}<em>${list.length}</em></h2></div>${list.length ? `<ul class="list">${list.map(zRow).join('')}</ul>` : '<div class="empty">Ni zadetkov.</div>'}`;
+  return h;
+}
+/* ---------- nastopi ---------- */
+function setsHtml() {
+  let h = `<div class="section-head"><h2>Nastopi${S.sets.length ? `<em>${S.sets.length}</em>` : ''}</h2><button class="btn" data-newset>${ICON_PLUS}Nov nastop</button></div>`;
+  if (!S.sets.length) return h + `<p class="hint-p">Nastop je seznam skladb po vrsti (tudi iz pesmarice). Med nastopom greš z gumbom »Naslednja« na naslednjo.</p>`;
+  h += '<div class="plans">';
+  for (const st of [...S.sets].sort((a, b) => (b.date || '').localeCompare(a.date || ''))) {
+    const n = st.items.filter(k => songByKey(k)).length;
+    h += `<div class="plan-card"><div class="pi"><b>${esc(st.name || 'Nastop')}</b><span>${fmtDate(st.date)}${st.date ? ' · ' : ''}${n} ${n === 1 ? 'skladba' : n === 2 ? 'skladbi' : n < 5 ? 'skladbe' : 'skladb'}</span></div>
+      <button class="btn" data-editset="${st.id}">Uredi</button><button class="btn primary" data-playset="${st.id}" ${n ? '' : 'disabled'}>Začni ▸</button></div>`;
+  }
+  return h + '</div>';
+}
+function setEditorHtml(st) {
+  const items = st.items.map(k => songByKey(k)).filter(Boolean);
+  let h = `<button class="linkback" data-setback>‹ Nazaj na zbor</button>
+  <div class="plan-head"><div class="fields"><input type="text" data-stname value="${esc(st.name)}" placeholder="Ime nastopa" aria-label="Ime nastopa"><input type="date" data-stdate value="${esc(st.date || '')}" aria-label="Datum nastopa"></div>
+  <div class="plan-actions"><button class="btn primary" data-playset="${st.id}" ${items.length ? '' : 'disabled'}>Začni nastop ▸</button><button class="btn" data-setpdf ${items.length ? '' : 'disabled'}>Izvozi PDF</button><button class="btn danger" data-delset="${st.id}">Izbriši</button></div></div>
+  <ol class="slots">`;
+  items.forEach((s, i) => {
+    h += `<li class="slotrow setrow2"><h4>${i + 1}.</h4><div class="picks"><div class="pick"><button data-setplayat="${i}"><span class="n">${isZbor(s) ? '♪' : numLabel(s.num) || '·'}</span><span class="t">${esc(s.title)}</span></button>
+      <button class="x" data-setmv="${i}|-1" aria-label="Višje" ${i ? '' : 'disabled'}>↑</button><button class="x" data-setmv="${i}|1" aria-label="Nižje" ${i < items.length - 1 ? '' : 'disabled'}>↓</button><button class="x" data-setrm="${i}" aria-label="Odstrani">×</button></div></div></li>`;
+  });
+  h += `<li class="slotrow"><h4></h4><div class="picks"><button class="addpick" data-setadd>+ Dodaj skladbo</button></div></li></ol>`;
+  return h;
+}
+const curSet = () => S.sets.find(x => x.id === S.setId) || null;
+function openSetPicker(st) {
+  const item = s => `<button data-pk="${esc(s.key)}"><span class="n">${isZbor(s) ? '♪' : numLabel(s.num) || '·'}</span><span class="t">${esc(s.title)}</span><span class="c">${isZbor(s) ? 'zbor' : 'pesmarica'}</span></button>`;
+  const listFor = q => {
+    const nq = norm(q);
+    if (!nq) { const z = zborDocs().map(zSong).filter(Boolean).sort((a, b) => coll.compare(a.title, b.title)); return z.length ? `<h5>Zbor</h5>${z.map(item).join('')}` : '<p>Vpiši naslov ali številko pesmi iz pesmarice.</p>'; }
+    const r = [...S.songs.filter(s => isZbor(s) && s.n.includes(nq)), ...search(q).filter(s => !isZbor(s)).slice(0, 50)];
+    return r.length ? r.map(item).join('') : '<p>Ni zadetkov.</p>';
+  };
+  modal(`<div class="picker" style="display:flex;flex-direction:column;gap:12px"><h3>Dodaj v nastop</h3><input type="search" placeholder="Naslov ali številka" aria-label="Išči skladbo"><div class="plist">${listFor('')}</div><div class="actions"><button class="btn" data-close>Končano</button></div></div>`, (m, close) => {
+    const inp = m.querySelector('input'), list = m.querySelector('.plist'); let t = 0;
+    inp.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { list.innerHTML = listFor(inp.value.trim()); }, 120); });
+    m.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.pk) { st.items.push(b.dataset.pk); saveMeta(); b.disabled = true; b.style.opacity = .45; render(); toast('Dodano v nastop'); } else if (b.hasAttribute('data-close')) close(); });
+  });
+}
+/* ---------- dodajanje: slika -> obrez -> izboljšava -> PDF ---------- */
+async function zAddFiles(files) {
+  files = [...files]; if (!files.length) return;
+  const pdfs = files.filter(f => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name)), imgs = files.filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|heic|webp)$/i.test(f.name));
+  for (const f of pdfs) await zFromPdf(f);
+  if (imgs.length) {
+    const pages = [];
+    for (let i = 0; i < imgs.length; i++) { const c = await zCropDialog(imgs[i], i, imgs.length); if (c === 'cancel') return; if (c) pages.push(c); }
+    if (pages.length) await zFinish(pages, '');
+  }
+}
+async function zFromPdf(f) {
+  toast('Pripravljam PDF …');
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+  const pages = [];
+  for (let i = 1; i <= Math.min(pdf.numPages, 30); i++) {
+    const pg = await pdf.getPage(i); const vp0 = pg.getViewport({ scale: 1 }); const sc = Math.min(3, 2400 / Math.max(vp0.width, vp0.height));
+    const vp = pg.getViewport({ scale: sc }); const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    await pg.render({ canvasContext: ctx, viewport: vp }).promise; pages.push(c);
+  }
+  await zFinish(pages, f.name.replace(/\.pdf$/i, ''));
+}
+function loadBitmap(file) { return createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = no; im.src = URL.createObjectURL(file); })); }
+function detectCorners(src) {
+  const w = 360, h = Math.round(src.height * w / src.width); const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d'); x.drawImage(src, 0, 0, w, h); const d = x.getImageData(0, 0, w, h).data;
+  const g = new Float32Array(w * h); const hist = new Array(256).fill(0);
+  for (let i = 0; i < w * h; i++) { const v = (d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11) | 0; g[i] = v; hist[v]++; }
+  let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i]; let sB = 0, wB = 0, best = 0, th = 128;
+  for (let i = 0; i < 256; i++) { wB += hist[i]; if (!wB) continue; const wF = w * h - wB; if (!wF) break; sB += i * hist[i]; const mB = sB / wB, mF = (sum - sB) / wF; const v = wB * wF * (mB - mF) ** 2; if (v > best) { best = v; th = i; } }
+  const lab = new Int32Array(w * h).fill(-1); let bestC = -1, bestN = 0, comp = 0; const stack = [];
+  for (let i = 0; i < w * h; i++) {
+    if (g[i] <= th || lab[i] >= 0) continue; let n = 0; stack.push(i); lab[i] = comp;
+    while (stack.length) { const p = stack.pop(); n++; const px = p % w, py = (p / w) | 0; for (const q of [px > 0 ? p - 1 : -1, px < w - 1 ? p + 1 : -1, py > 0 ? p - w : -1, py < h - 1 ? p + w : -1]) if (q >= 0 && lab[q] < 0 && g[q] > th) { lab[q] = comp; stack.push(q); } }
+    if (n > bestN) { bestN = n; bestC = comp; } comp++;
+  }
+  const full = [[0, 0], [src.width, 0], [src.width, src.height], [0, src.height]];
+  if (bestN < w * h * 0.2 || bestN > w * h * 0.985) return full;
+  let tl = [0, 0, 1e9], tr = [0, 0, -1e9], br = [0, 0, -1e9], bl = [0, 0, 1e9];
+  for (let i = 0; i < w * h; i++) { if (lab[i] !== bestC) continue; const px = i % w, py = (i / w) | 0; const s1 = px + py, s2 = px - py;
+    if (s1 < tl[2]) tl = [px, py, s1]; if (s1 > br[2]) br = [px, py, s1]; if (s2 > tr[2]) tr = [px, py, s2]; if (s2 < bl[2]) bl = [px, py, s2]; }
+  const k = src.width / w; return [tl, tr, br, bl].map(p => [p[0] * k, p[1] * k]);
+}
+function homography(src, dst) { // dst->src mapping coefficients
+  const A = [], b = [];
+  for (let i = 0; i < 4; i++) { const [x, y] = dst[i], [u, v] = src[i]; A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); b.push(u); A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); b.push(v); }
+  for (let i = 0; i < 8; i++) { let mx = i; for (let r = i + 1; r < 8; r++) if (Math.abs(A[r][i]) > Math.abs(A[mx][i])) mx = r; [A[i], A[mx]] = [A[mx], A[i]]; [b[i], b[mx]] = [b[mx], b[i]];
+    for (let r = 0; r < 8; r++) { if (r === i) continue; const f = A[r][i] / A[i][i]; for (let c = i; c < 8; c++) A[r][c] -= f * A[i][c]; b[r] -= f * b[i]; } }
+  return b.map((v, i) => v / A[i][i]);
+}
+function warpEnhance(src, q, enhance) {
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  let W = Math.max(dist(q[0], q[1]), dist(q[3], q[2])), H = Math.max(dist(q[0], q[3]), dist(q[1], q[2]));
+  const sc = Math.min(1, 2400 / Math.max(W, H)); W = Math.round(W * sc); H = Math.round(H * sc);
+  const sw = src.width, sh = src.height; const sc2 = document.createElement('canvas'); sc2.width = sw; sc2.height = sh; const sx = sc2.getContext('2d'); sx.drawImage(src, 0, 0);
+  const sd = sx.getImageData(0, 0, sw, sh).data;
+  const m = homography(q, [[0, 0], [W, 0], [W, H], [0, H]]);
+  const gray = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const den = m[6] * x + m[7] * y + 1; const u = (m[0] * x + m[1] * y + m[2]) / den, v = (m[3] * x + m[4] * y + m[5]) / den;
+    const iu = Math.min(sw - 2, Math.max(0, u | 0)), iv = Math.min(sh - 2, Math.max(0, v | 0)), fu = Math.min(1, Math.max(0, u - iu)), fv = Math.min(1, Math.max(0, v - iv));
+    const px = (yy, xx) => { const o = (yy * sw + xx) * 4; return sd[o] * 0.3 + sd[o + 1] * 0.59 + sd[o + 2] * 0.11; };
+    gray[y * W + x] = px(iv, iu) * (1 - fu) * (1 - fv) + px(iv, iu + 1) * fu * (1 - fv) + px(iv + 1, iu) * (1 - fu) * fv + px(iv + 1, iu + 1) * fu * fv;
+  }
+  const out = document.createElement('canvas'); out.width = W; out.height = H; const ox = out.getContext('2d'); const od = ox.createImageData(W, H);
+  let bg = null, bw = 0, bh = 0;
+  if (enhance) { // ozadje: velika zameglitev prek pomanjšane slike
+    bw = Math.max(8, Math.round(W / 16)); bh = Math.max(8, Math.round(H / 16)); bg = new Float32Array(bw * bh);
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { let mx = 0; const y0 = Math.floor(y * H / bh), y1 = Math.floor((y + 1) * H / bh), x0 = Math.floor(x * W / bw), x1 = Math.floor((x + 1) * W / bw); const vals = [];
+      for (let yy = y0; yy < y1; yy += 2) for (let xx = x0; xx < x1; xx += 2) vals.push(gray[yy * W + xx]); vals.sort((a, b) => a - b); mx = vals[Math.floor(vals.length * 0.9)] || 255; bg[y * bw + x] = mx; }
+    const b2 = bg.slice(); for (let it = 0; it < 2; it++) for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { let s = 0, n = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const yy = y + dy, xx = x + dx; if (yy >= 0 && yy < bh && xx >= 0 && xx < bw) { s += b2[yy * bw + xx]; n++; } } bg[y * bw + x] = s / n; }
+  }
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let v = gray[y * W + x];
+    if (enhance) { const gx = Math.min(bw - 1.001, Math.max(0, x * bw / W - 0.5)), gy = Math.min(bh - 1.001, Math.max(0, y * bh / H - 0.5)); const ix = gx | 0, iy = gy | 0, fx = gx - ix, fy = gy - iy;
+      const b = bg[iy * bw + ix] * (1 - fx) * (1 - fy) + bg[iy * bw + ix + 1] * fx * (1 - fy) + bg[(iy + 1) * bw + ix] * (1 - fx) * fy + bg[(iy + 1) * bw + ix + 1] * fx * fy;
+      const n = v / Math.max(30, b); v = n > 0.86 ? 255 : n < 0.5 ? 0 : (n - 0.5) / 0.36 * 255; }
+    const o = (y * W + x) * 4; od.data[o] = od.data[o + 1] = od.data[o + 2] = v; od.data[o + 3] = 255;
+  }
+  ox.putImageData(od, 0, 0); return out;
+}
+function zCropDialog(file, i, n) {
+  return new Promise(async res => {
+    let bmp; try { bmp = await loadBitmap(file); } catch { toast('Slike ni bilo mogoče odpreti'); res(null); return; }
+    let q = detectCorners(bmp); let enhance = S.settings.zEnh !== false;
+    const ov = document.createElement('div'); ov.className = 'zcrop';
+    ov.innerHTML = `<div class="zc-top"><b>Stran ${i + 1} od ${n}</b><span>Povleci kote na robove lista</span></div><div class="zc-stage"><canvas></canvas><svg></svg></div>
+      <div class="zc-bar"><button class="btn" data-a="cancel">Prekliči</button><button class="btn" data-a="full">Cela slika</button><label class="zc-enh"><input type="checkbox" ${enhance ? 'checked' : ''}> Izboljšaj (čisto belo ozadje)</label><button class="btn" data-a="skip">Izpusti</button><button class="btn primary" data-a="ok">${i === n - 1 ? 'Končaj' : 'Naprej ›'}</button></div>`;
+    document.body.append(ov);
+    const cv = ov.querySelector('canvas'), svg = ov.querySelector('svg'), stage = ov.querySelector('.zc-stage');
+    let k = 1;
+    const layout = () => { const r = stage.getBoundingClientRect(); k = Math.min(r.width / bmp.width, r.height / bmp.height); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k); cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height); svg.setAttribute('width', cv.width); svg.setAttribute('height', cv.height); svg.style.width = cv.width + 'px'; svg.style.height = cv.height + 'px'; draw(); };
+    const draw = () => { const p = q.map(([x, y]) => [x * k, y * k]); svg.innerHTML = `<polygon points="${p.map(a => a.join(',')).join(' ')}" fill="rgba(217,180,108,.18)" stroke="#d9b46c" stroke-width="2"/>` + p.map((a, j) => `<circle data-c="${j}" cx="${a[0]}" cy="${a[1]}" r="16" fill="rgba(217,180,108,.35)" stroke="#d9b46c" stroke-width="3"/>`).join(''); };
+    let drag = -1;
+    svg.addEventListener('pointerdown', e => { const r = svg.getBoundingClientRect(); const x = (e.clientX - r.left) / k, y = (e.clientY - r.top) / k; let bd = 1e9; q.forEach((p, j) => { const d = Math.hypot(p[0] - x, p[1] - y); if (d < bd) { bd = d; drag = j; } }); if (bd * k > 60) drag = -1; else svg.setPointerCapture(e.pointerId); });
+    svg.addEventListener('pointermove', e => { if (drag < 0) return; const r = svg.getBoundingClientRect(); q[drag] = [Math.max(0, Math.min(bmp.width, (e.clientX - r.left) / k)), Math.max(0, Math.min(bmp.height, (e.clientY - r.top) / k))]; draw(); });
+    svg.addEventListener('pointerup', () => { drag = -1; });
+    ov.querySelector('.zc-enh input').addEventListener('change', e => { enhance = e.target.checked; S.settings.zEnh = enhance; saveMeta(); });
+    ov.addEventListener('click', e => {
+      const b = e.target.closest('[data-a]'); if (!b) return; const a = b.dataset.a;
+      if (a === 'full') { q = [[0, 0], [bmp.width, 0], [bmp.width, bmp.height], [0, bmp.height]]; draw(); return; }
+      if (a === 'cancel') { ov.remove(); res('cancel'); return; }
+      if (a === 'skip') { ov.remove(); res(null); return; }
+      b.disabled = true; b.textContent = 'Obdelujem …';
+      setTimeout(() => { const out = warpEnhance(bmp, q, enhance); ov.remove(); res(out); }, 30);
+    });
+    requestAnimationFrame(layout); window.addEventListener('resize', layout, { once: true });
+  });
+}
+function zFinish(pages, name) {
+  return new Promise(res => {
+    modal(`<h3>Shrani note</h3><div class="txedit" style="display:flex;flex-direction:column;gap:10px"><input type="text" data-zt placeholder="Naslov skladbe" value="${esc(name)}" style="font:inherit;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink)"><input type="text" data-zc placeholder="Skladatelj (neobvezno)" style="font:inherit;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink)"><p style="margin:0;color:var(--muted)">${pages.length} ${pages.length === 1 ? 'stran' : pages.length === 2 ? 'strani' : 'strani'}</p></div><div class="actions"><button class="btn" data-x>Prekliči</button><button class="btn primary" data-ok>Shrani</button></div>`, (m, close) => {
+      setTimeout(() => m.querySelector('[data-zt]').focus(), 60);
+      m.addEventListener('click', async e => {
+        const b = e.target.closest('button'); if (!b) return;
+        if (b.hasAttribute('data-x')) { close(); res(); return; }
+        if (b.hasAttribute('data-ok')) { const t = m.querySelector('[data-zt]').value.trim() || 'Skladba ' + new Date().toLocaleDateString('sl-SI'); const c = m.querySelector('[data-zc]').value.trim(); b.disabled = true; b.textContent = 'Shranjujem …'; await zSave(pages, t, c); close(); res(); }
+      });
+    });
+  });
+}
+async function zSave(pages, title, comp) {
+  await loadPdfLib();
+  const pdf = await PDFLib.PDFDocument.create(); pdf.setTitle(title);
+  const id = 'z' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  for (let i = 0; i < pages.length; i++) {
+    const c = pages[i]; const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.86)); const bytes = await blob.arrayBuffer();
+    try { await DB.put('files', `zimg:${id}:${i + 1}`, blob); } catch {}
+    const img = await pdf.embedJpg(bytes); const w = 595, h = 595 * c.height / c.width; const pg = pdf.addPage([w, h]); pg.drawImage(img, { x: 0, y: 0, width: w, height: h });
+  }
+  const file = new File([await pdf.save()], title + '.pdf', { type: 'application/pdf' });
+  const doc = { id, name: title, comp, size: file.size, pages: pages.length, book: null, songs: [], added: Date.now(), status: 'ready', zbor: true, omr: { state: 'none' } };
+  memFiles.set(id, file); try { await DB.put('files', id, file); } catch { storageFailed(); }
+  S.docs.push(doc); await saveDoc(doc); buildSongs(); S.tab = 'zbor'; render();
+  toast(`Shranjeno: ${title}`); zUpload(doc);
+}
+/* ---------- branje not prek GitHuba ---------- */
+const ghCfg = () => S.settings.gh || {};
+async function gh(path, opt = {}) {
+  const c = ghCfg();
+  return fetch(`https://api.github.com/repos/${c.repo}/${path}`, { method: opt.method || 'GET', body: opt.body, headers: { Authorization: `Bearer ${c.token}`, Accept: opt.raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' } });
+}
+const blobB64 = blob => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
+async function zUpload(d) {
+  const c = ghCfg(); if (!c.token || !c.repo || !navigator.onLine) { render(); return; }
+  d.omr = { state: 'up' }; render();
+  try {
+    for (let i = 1; i <= d.pages; i++) {
+      const blob = await DB.get('files', `zimg:${d.id}:${i}`); if (!blob) continue;
+      const r = await gh(`contents/inbox/${d.id}/${i}.jpg`, { method: 'PUT', body: JSON.stringify({ message: `Note: ${d.name} (${i}/${d.pages})`, content: await blobB64(blob) }) });
+      if (!r.ok && r.status !== 422) throw new Error('GitHub ' + r.status);
+    }
+    d.omr = { state: 'wait', since: Date.now() };
+  } catch (e) { d.omr = { state: 'none', msg: String(e.message || e) }; toast('Nalaganje za branje ni uspelo · poskusim znova pozneje'); }
+  await saveDoc(d); render(); zSchedule();
+}
+let zTimer = 0;
+function zSchedule() { clearTimeout(zTimer); if (zborDocs().some(d => !S.notes['z:' + d.id] && ['wait', 'up', 'none'].includes((d.omr || {}).state))) zTimer = setTimeout(zPoll, 25000); }
+async function zPoll() {
+  const c = ghCfg(); if (!c.token || !navigator.onLine) { zSchedule(); return; }
+  let changed = false;
+  for (const d of zborDocs()) {
+    if (S.notes['z:' + d.id]) continue;
+    const st = (d.omr || {}).state;
+    if (st === 'none' || !st) { await zUpload(d); continue; }
+    if (st !== 'wait') continue;
+    try {
+      const r = await gh(`contents/out/${d.id}`); if (r.status === 404) continue; if (!r.ok) continue;
+      const files = await r.json(); const xml = files.filter(f => f.name.endsWith('.musicxml')), err = files.filter(f => f.name.endsWith('.err'));
+      if (xml.length + err.length < d.pages) continue;
+      let data = null;
+      for (let i = 1; i <= d.pages; i++) {
+        const f = xml.find(x => x.name === i + '.musicxml'); if (!f) continue;
+        const t = await (await gh(`contents/out/${d.id}/${i}.musicxml`, { raw: true })).text();
+        try { const p = parseMusicXml(t); if (!data) data = p; else { const off = data.len; data.ev.push(...p.ev.map(e => [e[0] + off, e[1], e[2], e[3]])); data.len += p.len; data.voices = Math.max(data.voices, p.voices); } } catch {}
+      }
+      if (data) { data.src = 'omr'; data.inst = 'piano'; S.notes['z:' + d.id] = data; d.omr = { state: 'done' }; toast(`Note pripravljene: ${d.name}`); }
+      else d.omr = { state: 'err' };
+      await saveDoc(d); changed = true;
+    } catch {}
+  }
+  if (changed) { await saveNotes(); render(); }
+  zSchedule();
+}
+function zSetup() {
+  const c = ghCfg();
+  modal(`<h3>Branje not prek GitHuba</h3><p>Slikane note se preberejo v tvojem zasebnem repozitoriju <b>zbor-note</b>. Ključ ostane samo v tej napravi.</p>
+    <div class="txedit" style="display:flex;flex-direction:column;gap:10px"><input type="text" data-repo value="${esc(c.repo || 'Poni-9/zbor-note')}" aria-label="Repozitorij" style="font:inherit;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink)"><input type="password" data-tok value="${esc(c.token || '')}" placeholder="github_pat_…" aria-label="Ključ" autocomplete="off" style="font:inherit;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink)"><p data-st style="margin:0;color:var(--muted)"></p></div>
+    <div class="actions">${c.token ? '<button class="btn danger" data-rm>Odstrani ključ</button>' : ''}<button class="btn" data-x>Zapri</button><button class="btn primary" data-ok>Shrani in preizkusi</button></div>`, (m, close) => {
+    m.addEventListener('click', async e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.hasAttribute('data-x')) { close(); return; }
+      if (b.hasAttribute('data-rm')) { S.settings.gh = {}; saveMeta(); close(); render(); return; }
+      if (b.hasAttribute('data-ok')) {
+        S.settings.gh = { repo: m.querySelector('[data-repo]').value.trim(), token: m.querySelector('[data-tok]').value.trim() }; saveMeta();
+        const st = m.querySelector('[data-st]'); st.textContent = 'Preizkušam …';
+        try { const r = await gh(''); st.textContent = r.ok ? '✓ Povezava deluje.' : r.status === 404 ? 'Repozitorija ni ali ključ nima dostopa do njega.' : r.status === 401 ? 'Ključ ni veljaven.' : 'Napaka ' + r.status; if (r.ok) { setTimeout(() => { close(); render(); zPoll(); }, 700); } }
+        catch { st.textContent = 'Ni povezave z internetom.'; }
+      }
+    });
+  });
+}
+function zMenu(d) {
+  modal(`<h3>${esc(d.name)}</h3><div class="txedit" style="display:flex;flex-direction:column;gap:10px"><input type="text" data-zt value="${esc(d.name)}" aria-label="Naslov" style="font:inherit;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink)"><input type="text" data-zc value="${esc(d.comp || '')}" placeholder="Skladatelj" aria-label="Skladatelj" style="font:inherit;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink)"></div>
+    <div class="actions"><button class="btn danger" data-del>Izbriši</button><button class="btn" data-re>Preberi note znova</button><button class="btn primary" data-ok>Shrani</button></div>`, (m, close) => {
+    m.addEventListener('click', async e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.hasAttribute('data-ok')) { d.name = m.querySelector('[data-zt]').value.trim() || d.name; d.comp = m.querySelector('[data-zc]').value.trim(); await saveDoc(d); buildSongs(); render(); close(); }
+      if (b.hasAttribute('data-re')) { delete S.notes['z:' + d.id]; await saveNotes(); d.omr = { state: 'wait', since: Date.now() }; await saveDoc(d); close(); render(); zPoll(); }
+      if (b.hasAttribute('data-del')) {
+        if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = 'Res izbriši?'; return; }
+        for (let i = 1; i <= d.pages; i++) try { await DB.del('files', `zimg:${d.id}:${i}`); } catch {}
+        delete S.notes['z:' + d.id]; await saveNotes(); S.sets.forEach(st => { st.items = st.items.filter(k => k !== 'z:' + d.id); }); saveMeta();
+        close(); await removeDoc(d);
+      }
+    });
+  });
+}
+
 function listHtml(arr) {
   if (!arr.length) return '';
   const shown = arr.slice(0, S.limit);
@@ -1722,7 +2048,7 @@ function render() {
       if (rec.length) h += `<div class="section-head"><h2>Nazadnje odprto</h2></div><div class="recent">${rec.map(s => `<button data-open="${esc(s.key)}"><span class="n">${numLabel(s.num) || '·'}</span><span class="t">${esc(s.title)}</span></button>`).join('')}</div>`;
       h += popularHtml();
       h += `<div class="section-head"><h2>Kazalo</h2><div class="chips"><button class="chip" data-sort="sec" aria-pressed="${S.sort === 'sec'}">Po sklopih</button><button class="chip" data-sort="num" aria-pressed="${S.sort === 'num'}">Po številki</button><button class="chip" data-sort="abc" aria-pressed="${S.sort === 'abc'}">Po abecedi</button></div></div>`;
-      h += S.sort === 'sec' ? sectionsHtml() : listHtml([...S.songs].sort(cmpSong));
+      h += S.sort === 'sec' ? sectionsHtml() : listHtml(S.songs.filter(s => s.src !== 'zbor').sort(cmpSong));
     }
   } else if (S.tab === 'fav') {
     let fav = S.songs.filter(s => S.favs.has(s.key));
@@ -1731,6 +2057,7 @@ function render() {
     h += `<div class="section-head"><h2>Priljubljene${fav.length ? `<em>${fav.length}</em>` : ''}</h2></div>`;
     h += fav.length ? listHtml(fav) : `<div class="empty"><strong>${S.q ? 'Med priljubljenimi ni zadetkov' : 'Še ni priljubljenih pesmi'}</strong>Tapni zvezdico ob pesmi na seznamu ali med branjem, pa se pesem pojavi tukaj.</div>`;
   } else if (S.tab === 'mass') h += massHtml();
+  else if (S.tab === 'zbor') h += zborHtml();
   else h += booksHtml();
   content.innerHTML = h;
 }
@@ -1745,7 +2072,7 @@ function booksHtml() {
       ${d ? (d.status === 'busy' ? `<span class="status busy">Nalagam …</span>` : `<span class="status ok">Naložena</span><div class="meta">${esc(d.name)} · ${(d.size / 1048576).toFixed(1)} MB</div>`) : `<span class="status no">Ni naložena</span>`}
       <div class="actions">${d ? `<button class="btn" data-openbook="${d.id}">Odpri</button><button class="btn danger" data-del="${d.id}">Odstrani</button>` : `<button class="btn primary" data-add>Dodaj PDF ${b}</button>`}</div></div>`;
   }
-  for (const d of S.docs.filter(d => !d.book)) {
+  for (const d of S.docs.filter(d => !d.book && !d.zbor)) {
     h += `<div class="book"><h3>${esc(d.name)}</h3><div class="meta">${d.pages || '?'} strani · ${d.songs.length} naslovov</div>
       ${d.status === 'busy' ? `<span class="status busy" data-progress="${d.id}">Iščem naslove …</span>` : `<span class="status ok">Naložena</span>`}
       <div class="actions"><button class="btn" data-openbook="${d.id}">Odpri</button><button class="btn danger" data-del="${d.id}">Odstrani</button></div></div>`;
@@ -1772,7 +2099,7 @@ function booksHtml() {
 /* ---------------- home events ---------------- */
 const qEl = $('#q');
 let qTimer = 0;
-qEl.addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => { S.q = qEl.value.trim(); S.limit = 200; if (S.tab === 'books') S.tab = 'all'; render(); $('#scroll').scrollTop = 0; }, 80); });
+qEl.addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => { S.q = qEl.value.trim(); S.limit = 200; if (S.tab === 'books' || S.tab === 'mass') S.tab = 'all'; render(); $('#scroll').scrollTop = 0; }, 80); });
 qEl.addEventListener('keydown', e => {
   if (e.key === 'Enter') { const s = (S.q ? search(S.q) : []).find(x => songDoc(x)); if (s) { qEl.blur(); openSong(s); } }
   if (e.key === 'Escape') { qEl.value = ''; S.q = ''; render(); }
@@ -1791,6 +2118,22 @@ content.addEventListener('click', e => {
   if (b.hasAttribute('data-more')) { S.limit += 400; render(); return; }
   if (b.dataset.sort) { S.sort = b.dataset.sort; saveMeta(); render(); return; }
   if (b.hasAttribute('data-newplan')) { newPlan(); return; }
+  if (b.dataset.zadd) { $(b.dataset.zadd === 'cam' ? '#zcam' : '#zfile').click(); return; }
+  if (b.hasAttribute('data-zsetup')) { zSetup(); return; }
+  if (b.dataset.zmenu) { const d = S.docs.find(x => x.id === b.dataset.zmenu); if (d) zMenu(d); return; }
+  if (b.hasAttribute('data-newset')) { const st = { id: 's' + Date.now().toString(36), name: 'Nastop ' + fmtDate(new Date().toISOString().slice(0, 10)), date: new Date().toISOString().slice(0, 10), items: [] }; S.sets.push(st); S.setId = st.id; saveMeta(); render(); $('#scroll').scrollTop = 0; return; }
+  if (b.dataset.editset) { S.setId = b.dataset.editset; render(); $('#scroll').scrollTop = 0; return; }
+  if (b.hasAttribute('data-setback')) { S.setId = null; render(); return; }
+  if (b.hasAttribute('data-setadd')) { const st = curSet(); if (st) openSetPicker(st); return; }
+  if (b.dataset.playset) { const st = S.sets.find(x => x.id === b.dataset.playset); if (st) playSet(st, 0); return; }
+  if (b.dataset.setplayat) { const st = curSet(); if (st) playSet(st, +b.dataset.setplayat); return; }
+  if (b.dataset.setmv) { const st = curSet(); const [i, d] = b.dataset.setmv.split('|').map(Number); const it = st.items.filter(k => songByKey(k)); const j = i + d; if (j >= 0 && j < it.length) { [it[i], it[j]] = [it[j], it[i]]; st.items = it; saveMeta(); render(); } return; }
+  if (b.dataset.setrm) { const st = curSet(); const it = st.items.filter(k => songByKey(k)); it.splice(+b.dataset.setrm, 1); st.items = it; saveMeta(); render(); return; }
+  if (b.hasAttribute('data-setpdf')) { const st = curSet(); if (st) exportSongs(st.items.map(songByKey).filter(Boolean), safeName(st.name || 'Nastop') + '.pdf'); return; }
+  if (b.dataset.delset) {
+    if (!armed.get(b)) { armed.set(b, 1); b.classList.add('armed'); b.textContent = 'Res izbriši?'; setTimeout(() => { if (b.isConnected) { armed.delete(b); b.classList.remove('armed'); b.textContent = 'Izbriši'; } }, 3500); return; }
+    S.sets = S.sets.filter(x => x.id !== b.dataset.delset); S.setId = null; saveMeta(); render(); return;
+  }
   if (b.hasAttribute('data-importnotes')) { $('#notesfile').click(); return; }
   if (b.hasAttribute('data-clearnotes')) {
     if (!armed.get(b)) { armed.set(b, 1); b.classList.add('armed'); b.textContent = 'Res izbriši?'; setTimeout(() => { if (b.isConnected) { armed.delete(b); b.classList.remove('armed'); b.textContent = 'Izbriši vse note'; } }, 3500); return; }
@@ -1827,10 +2170,12 @@ content.addEventListener('toggle', e => {
   } else S.openSecs.delete(k);
 }, true);
 content.addEventListener('input', e => {
+  if (e.target.matches('[data-stname]')) { const st = curSet(); if (st) { st.name = e.target.value; saveMeta(); } return; }
   const pl = curPlan(); if (!pl) return;
   if (e.target.matches('[data-plname]')) { pl.name = e.target.value; saveMeta(); }
 });
 content.addEventListener('change', e => {
+  if (e.target.matches('[data-stdate]')) { const st = curSet(); if (st) { st.date = e.target.value; saveMeta(); render(); } return; }
   if (e.target.matches('[data-pldate]')) { const pl = curPlan(); if (pl) { pl.date = e.target.value; saveMeta(); render(); } return; } const k = e.target.dataset.set; if (!k) return; S.settings[k] = e.target.checked; saveMeta(); });
 $('#file').addEventListener('change', e => { const f = e.target.files; if (f && f.length) addFiles(f); e.target.value = ''; });
 let dropEl = null;
@@ -2319,6 +2664,8 @@ $('#pl-play').addEventListener('click', () => { if (!PL.data) return; if (PL.pla
 $('#pl-seek').addEventListener('input', e => { if (!PL.data) return; const p = +e.target.value; if (PL.playing) plSeek(p); else { PL.pos = p; plUi(); } });
 $('#pl-loop').addEventListener('click', () => { S.settings.loop = !S.settings.loop; saveMeta(); plUi(); });
 $('#pl-load').addEventListener('click', () => $('#xmlfile').click());
+['#zcam', '#zfile'].forEach(sel => $(sel).addEventListener('change', e => { const fs = [...(e.target.files || [])]; e.target.value = ''; zAddFiles(fs); }));
+window.addEventListener('online', () => zPoll());
 $('#notesfile').addEventListener('change', async e => { const fs = [...(e.target.files || [])]; e.target.value = ''; for (const f of fs) await importNotesPack(f); });
 $('#xmlfile').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f && PL.song) importSongXml(f, PL.song).then(() => { PL.data = notesFor(PL.song); plUi(); }); });
 $('#playerbar').addEventListener('click', e => {
@@ -2409,13 +2756,13 @@ async function boot() {
     try { S.notes = (await DB.get('meta', 'notes')) || {}; } catch {}
   } catch { S.storageOK = false; }
   if (meta) {
-    S.favs = new Set(meta.favs || []); S.recent = meta.recent || []; S.plans = meta.plans || []; S.counts = meta.counts || {};
+    S.favs = new Set(meta.favs || []); S.recent = meta.recent || []; S.plans = meta.plans || []; S.counts = meta.counts || {}; S.sets = meta.sets || [];
     Object.assign(S.settings, meta.settings || {}); if (meta.sort) S.sort = meta.sort;
     if (!S.settings.fsOff1) { S.settings.autoFs = false; S.settings.fsOff1 = 1; }
     if (!S.settings.secDef1) { S.sort = 'sec'; S.settings.secDef1 = 1; }
   }
   if (location.hash === '#beri') location.hash = '';
-  buildSongs(); render(); unlockNotes();
+  buildSongs(); render(); unlockNotes(); setTimeout(zPoll, 1500);
   try { navigator.storage?.persist?.().catch(() => {}); } catch {}
   if (!window.pdfjsLib) toast('Pregledovalnik PDF se ni naložil. Preveri povezavo in osveži stran.');
 }
