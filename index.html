@@ -1,0 +1,2401 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#11131a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pesmarica">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}body{margin:0}[hidden]{display:none!important}</style>
+<script>
+window.NOTNIK_WORKER = 'pdf.worker.min.js';
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
+</head>
+<body>
+<title>Pesmarica Slavimo Gospoda</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;0,6..96,700;1,6..96,400;1,6..96,600&family=Cormorant+Garamond:wght@500;600;700&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-screen app. Home = engraved title block + search + hymn index that scrolls; Reader = full-screen dark stage, page strip that slides, glass bars that fade. */
+:root {
+  --bg: #f4f3ef;
+  --surface: #fbfaf7;
+  --ink: #15171f;
+  --muted: #676a76;
+  --line: #dedbd2;
+  --gold: #8c6421;
+  --gold-soft: #efe5d2;
+  --on-gold: #fffdf8;
+  --stage: #0c0d11;
+  --glass: rgba(16, 17, 23, .82);
+  --glass-ink: #efeadf;
+  --glass-gold: #d9b46c;
+  --danger: #a3242c;
+  --ok: #2f6f48;
+  --f-display: "Bodoni Moda", "Bodoni 72", Didot, Georgia, serif;
+  --f-title: "Cormorant Garamond", "Garamond", "Iowan Old Style", Georgia, serif;
+  --f-ui: "Figtree", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --ease: cubic-bezier(.22, .61, .36, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1015; --surface: #16171e; --ink: #ece7dc; --muted: #9b998f; --line: #2a2a31;
+    --gold: #d9b46c; --gold-soft: #2b2518; --on-gold: #17130b; --danger: #ec7a7f; --ok: #79c392;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1015; --surface: #16171e; --ink: #ece7dc; --muted: #9b998f; --line: #2a2a31;
+  --gold: #d9b46c; --gold-soft: #2b2518; --on-gold: #17130b; --danger: #ec7a7f; --ok: #79c392;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-ui); font-size: 16px; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.wrap { max-width: 900px; margin: 0 auto; padding-left: max(18px, env(safe-area-inset-left, 0px)); padding-right: max(18px, env(safe-area-inset-right, 0px)); }
+
+/* ---------- home ---------- */
+#home { height: 100%; display: flex; flex-direction: column; }
+.top { background: var(--bg); padding-block: 22px 0; position: relative; z-index: 2; }
+.top::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--line); }
+.masthead { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 16px; }
+.eyebrow { font-family: var(--f-display); font-style: italic; font-size: 17px; color: var(--gold); letter-spacing: .02em; }
+.masthead h1 { margin: 2px 0 0; font-family: var(--f-display); font-weight: 600; font-size: clamp(32px, 5.6vw, 50px); line-height: 1; letter-spacing: -.015em; text-wrap: balance; }
+.tally { font-family: var(--f-ui); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); text-align: right; line-height: 1.7; padding-bottom: 4px; }
+.tally b { font-family: var(--f-display); font-size: 20px; letter-spacing: 0; color: var(--ink); font-weight: 600; font-variant-numeric: lining-nums; }
+.staff { height: 13px; margin-top: 14px; background: repeating-linear-gradient(to bottom, var(--gold) 0 1px, transparent 1px 3px); opacity: .55; -webkit-mask: linear-gradient(90deg, #000 0, #000 60%, transparent); mask: linear-gradient(90deg, #000 0, #000 60%, transparent); }
+.search { position: relative; margin-top: 18px; }
+.search svg { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); width: 21px; height: 21px; color: var(--gold); pointer-events: none; }
+.search input { width: 100%; box-sizing: border-box; height: 58px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); padding: 0 54px 0 52px; font-size: 19px; outline: none; box-shadow: 0 1px 0 rgba(0,0,0,.02), 0 8px 24px -16px rgba(0,0,0,.25); transition: border-color .2s; }
+.search input::placeholder { color: var(--muted); }
+.search input::-webkit-search-cancel-button { display: none; }
+.search input:focus { border-color: var(--gold); }
+.search .clear { position: absolute; right: 7px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border: 0; background: transparent; color: var(--muted); border-radius: 12px; display: grid; place-items: center; }
+.tabs { display: flex; gap: 26px; margin-top: 14px; overflow-x: auto; scrollbar-width: none; }
+.tab { flex: 0 0 auto; border: 0; background: transparent; padding: 10px 0 13px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; display: flex; gap: 8px; align-items: baseline; position: relative; z-index: 1; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--gold); }
+.tab .cnt { font-family: var(--f-display); font-size: 14px; color: var(--gold); font-variant-numeric: lining-nums; }
+.scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding-block: 22px 8px; }
+.section-head h2 { margin: 0; font-family: var(--f-display); font-style: italic; font-weight: 400; font-size: 20px; color: var(--ink); }
+.section-head h2 em { font-style: normal; font-family: var(--f-ui); font-size: 13px; color: var(--muted); margin-left: 8px; letter-spacing: .04em; }
+.chips { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.chip { border: 0; background: transparent; border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.recent { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
+.recent button { flex: 0 0 auto; width: 190px; text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.recent .n { font-family: var(--f-display); color: var(--gold); font-size: 22px; font-weight: 600; line-height: 1; font-variant-numeric: lining-nums; }
+.recent .t { font-family: var(--f-title); font-weight: 600; font-size: 18px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.list { list-style: none; margin: 0; padding: 0; }
+.pop { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px; font: 600 11px/1.5 var(--f-ui); letter-spacing: .04em; color: var(--gold); background: var(--gold-soft); vertical-align: 3px; }
+.recent .pc { font-size: 12px; color: var(--muted); }
+.plans { display: grid; gap: 10px; }
+.plan-card { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); padding: 16px 18px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.plan-card .pi { flex: 1 1 220px; min-width: 0; }
+.plan-card b { display: block; font-family: var(--f-display); font-size: 21px; font-weight: 600; }
+.plan-card span { color: var(--muted); font-size: 14px; }
+.plan-head { display: grid; gap: 10px; margin-top: 8px; }
+.plan-head .fields { display: flex; gap: 10px; flex-wrap: wrap; }
+.plan-head input { font: inherit; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 12px; padding: 11px 14px; min-height: 46px; box-sizing: border-box; }
+.plan-head input[type="text"] { flex: 1 1 240px; font-family: var(--f-display); font-size: 20px; }
+.plan-season { font-size: 14px; color: var(--muted); }
+.plan-season b { color: var(--gold); font-weight: 600; }
+.plan-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.linkback { border: 0; background: none; color: var(--gold); font-weight: 600; padding: 16px 0 4px; font-size: 15px; }
+.slots { list-style: none; margin: 14px 0 24px; padding: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.slotrow { display: grid; grid-template-columns: 150px 1fr; gap: 6px 14px; padding: 12px 16px; border-bottom: 1px solid var(--line); align-items: start; }
+.slotrow:last-child { border-bottom: 0; }
+.slotrow > h4 { margin: 0; padding-top: 10px; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.slotrow .picks { display: flex; flex-direction: column; gap: 6px; }
+.pick { display: flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.pick > button:first-child { flex: 1; min-width: 0; display: flex; gap: 12px; align-items: baseline; border: 0; background: none; text-align: left; padding: 9px 12px; color: var(--ink); }
+.pick .n { font-family: var(--f-display); color: var(--gold); font-weight: 600; font-size: 18px; font-variant-numeric: lining-nums tabular-nums; }
+.pick .t { font-family: var(--f-title); font-weight: 600; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick .x { border: 0; background: none; color: var(--muted); width: 42px; height: 42px; font-size: 24px; line-height: 1; flex: none; }
+.addpick { align-self: flex-start; border: 1px dashed var(--line); background: none; color: var(--gold); border-radius: 12px; padding: 8px 14px; font-weight: 600; min-height: 40px; }
+@media (max-width: 560px) { .slotrow { grid-template-columns: 1fr; } .slotrow > h4 { padding-top: 0; } }
+.picker input { font: inherit; width: 100%; box-sizing: border-box; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 12px; padding: 12px 14px; }
+.picker .plist { display: flex; flex-direction: column; max-height: 56vh; overflow: auto; margin: 0 -8px; }
+.picker .plist h5 { margin: 12px 8px 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+.picker .plist button { display: flex; gap: 12px; align-items: baseline; text-align: left; border: 0; background: none; padding: 10px 8px; border-radius: 10px; color: var(--ink); }
+.picker .plist button:active { background: var(--gold-soft); }
+.picker .plist .n { font-family: var(--f-display); color: var(--gold); font-weight: 600; font-size: 18px; min-width: 56px; font-variant-numeric: lining-nums tabular-nums; }
+.picker .plist .t { flex: 1; min-width: 0; font-family: var(--f-title); font-weight: 600; font-size: 18px; }
+.picker .plist .c { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.planbtn { display: none; align-items: center; border: 0; border-radius: 12px; background: rgba(217,180,108,.16); color: var(--glass-gold); font-weight: 600; padding: 0 12px; height: 44px; white-space: nowrap; flex: 0 1 auto; max-width: 40vw; overflow: hidden; text-overflow: ellipsis; }
+#reader.inplan .planbtn { display: inline-flex; }
+.songpick { display: flex; flex-direction: column; gap: 8px; }
+.songpick .sp { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 14px; padding: 8px 8px 8px 14px; }
+.songpick .sp .n { font-family: var(--f-display); color: var(--gold); font-weight: 600; font-size: 20px; min-width: 44px; font-variant-numeric: lining-nums tabular-nums; }
+.songpick .sp .t { flex: 1; min-width: 0; font-family: var(--f-title); font-weight: 600; font-size: 19px; line-height: 1.2; }
+.songpick .sp .t small { display: block; font-family: var(--f-ui); font-weight: 400; font-size: 13px; color: var(--muted); }
+.songpick .sp .btn { min-height: 44px; padding: 8px 12px; }
+.songpick .sp .btn svg { width: 20px; height: 20px; }
+.songpick .sp .btn[aria-pressed="true"] { color: var(--gold); border-color: var(--gold); }
+.txedit textarea { font: 600 18px/1.35 var(--f-ui); width: 100%; box-sizing: border-box; min-height: 110px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 12px; padding: 12px; resize: vertical; }
+.txedit .row2 { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.txedit .row2 .btn[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+.tx-glyph { font: 700 21px/1 Georgia, serif; }
+.playerbar { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); z-index: 5; width: min(760px, calc(100% - 20px)); box-sizing: border-box; background: var(--glass); color: var(--glass-ink); border: 1px solid rgba(217,180,108,.25); border-radius: 18px; padding: 10px 12px; display: grid; gap: 8px; box-shadow: 0 12px 34px rgba(0,0,0,.35); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); transition: bottom .25s var(--ease); }
+#reader.quiet .playerbar { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+.playerbar .pl-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.playerbar .pl-title { flex: 1; min-width: 0; font-family: var(--f-title); font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.playerbar .pl-title b { font-family: var(--f-display); color: var(--glass-gold); margin-right: 4px; }
+.playerbar .pl-play { width: 54px; height: 54px; border-radius: 50%; border: 0; background: var(--glass-gold); color: #1b1608; display: grid; place-items: center; flex: none; }
+.playerbar .pl-play svg { width: 26px; height: 26px; }
+.playerbar input[type=range] { flex: 1; min-width: 80px; accent-color: var(--glass-gold); height: 30px; }
+.playerbar .pl-time { font-variant-numeric: tabular-nums; font-size: 13px; opacity: .75; white-space: nowrap; }
+.playerbar .grp { display: inline-flex; align-items: center; gap: 2px; border: 1px solid rgba(255,255,255,.14); border-radius: 12px; padding: 2px; }
+.playerbar .grp > span { min-width: 64px; text-align: center; font-size: 13px; line-height: 1.15; }
+.playerbar .grp > span b { display: block; font-family: var(--f-display); font-size: 18px; color: var(--glass-gold); font-variant-numeric: lining-nums tabular-nums; }
+.playerbar .sb { min-width: 40px; height: 40px; border: 0; border-radius: 10px; background: transparent; color: var(--glass-ink); font-size: 20px; font-weight: 600; }
+.playerbar .sb:active { background: rgba(255,255,255,.1); }
+.playerbar .vb { width: 40px; height: 40px; border-radius: 10px; border: 1px solid rgba(255,255,255,.2); background: transparent; color: var(--glass-ink); font-weight: 700; opacity: .45; }
+.playerbar .vb[aria-pressed="true"] { opacity: 1; border-color: var(--glass-gold); }
+.playerbar .vb.solo { background: var(--glass-gold); color: #1b1608; }
+.playerbar .sb[aria-pressed="true"] { color: var(--glass-gold); background: rgba(217,180,108,.14); }
+.playerbar .pl-ctrl { flex-wrap: wrap; justify-content: space-between; row-gap: 6px; }
+.playerbar .pl-src { font-size: 12px; opacity: .6; }
+.playerbar .pl-none { display: none; font-size: 15px; line-height: 1.45; opacity: .9; }
+.playerbar.nodata .pl-none { display: block; }
+.playerbar.nodata .pl-has { display: none; }
+.playerbar .pl-none .btn { margin-top: 8px; background: rgba(255,255,255,.08); color: var(--glass-ink); border-color: rgba(255,255,255,.2); min-height: 42px; }
+#reader.playing .penbar { display: none; }
+.secs { display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; }
+.sec-part { margin: 14px 0 0; font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
+.sec { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; }
+.sec > summary { list-style: none; display: flex; align-items: center; gap: 12px; padding: 14px 16px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.sec > summary::-webkit-details-marker { display: none; }
+.sec > summary:active { background: var(--gold-soft); }
+.sec-t { flex: 1; min-width: 0; font-family: var(--f-display); font-size: 19px; line-height: 1.2; color: var(--ink); }
+.sec-m { font-size: 13px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sec-c { width: 18px; height: 18px; flex: none; color: var(--muted); transition: transform .2s; }
+.sec[open] > summary .sec-c { transform: rotate(90deg); }
+.sec[open] > summary { border-bottom: 1px solid var(--line); }
+.sec .list { padding: 0 14px; }
+.sec .row:last-child { border-bottom: 0; }
+.row { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
+.row-main { flex: 1; min-width: 0; display: grid; grid-template-columns: 70px 1fr auto; align-items: center; gap: 2px 14px; border: 0; background: transparent; text-align: left; padding: 13px 0 13px 2px; min-height: 66px; border-radius: 10px; transition: background .15s; }
+.row-main:active { background: var(--gold-soft); }
+.num { font-family: var(--f-display); font-weight: 600; font-size: 24px; color: var(--gold); font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; line-height: 1; }
+.num.range { font-size: 15px; }
+.tt { min-width: 0; }
+.tt b { display: block; font-family: var(--f-title); font-weight: 600; font-size: 21px; line-height: 1.15; }
+.tt span { display: block; font-size: 14px; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.loc { font-size: 13px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.loc i { font-family: var(--f-display); font-style: normal; font-weight: 600; color: var(--ink); margin-right: 4px; }
+.loc.missing { color: var(--danger); }
+.star { flex: 0 0 56px; border: 0; background: transparent; color: var(--line); display: grid; place-items: center; transition: color .15s, transform .15s; }
+.star:active { transform: scale(.88); }
+.star svg { width: 25px; height: 25px; }
+.star[aria-pressed="true"] { color: var(--gold); }
+.empty { text-align: center; color: var(--muted); padding-block: 56px; max-width: 36ch; margin: 0 auto; line-height: 1.55; }
+.empty strong { display: block; color: var(--ink); font-family: var(--f-title); font-size: 24px; font-weight: 600; margin-bottom: 6px; }
+.more { display: flex; margin: 18px auto 36px; }
+
+.notice { margin-top: 18px; border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent); background: var(--gold-soft); border-radius: 16px; padding: 16px 18px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+.notice p { margin: 0; flex: 1 1 260px; line-height: 1.5; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 11px 18px; font-weight: 600; min-height: 46px; display: inline-flex; align-items: center; gap: 8px; justify-content: center; }
+.btn.primary { background: var(--gold); border-color: var(--gold); color: var(--on-gold); }
+.btn.danger { color: var(--danger); }
+.btn.danger.armed { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn svg { width: 19px; height: 19px; }
+
+.books { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; padding-block: 6px 14px; }
+.book { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0; position: relative; overflow: hidden; }
+.book .roman { position: absolute; right: 18px; top: 6px; font-family: var(--f-display); font-size: 84px; font-weight: 400; color: var(--gold); opacity: .18; line-height: 1; pointer-events: none; }
+.book h3 { margin: 0; font-family: var(--f-display); font-size: 23px; font-weight: 600; }
+.book .meta { font-size: 14px; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
+.status { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; padding: 4px 11px; border-radius: 999px; align-self: flex-start; }
+.status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.status.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); }
+.status.no { color: var(--danger); background: color-mix(in srgb, var(--danger) 11%, transparent); }
+.status.busy { color: var(--gold); background: var(--gold-soft); }
+.book .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+.help { color: var(--muted); font-size: 15px; line-height: 1.6; max-width: 62ch; padding-block: 4px 40px; }
+.help h3 { color: var(--ink); font-family: var(--f-title); font-size: 21px; font-weight: 600; margin: 20px 0 2px; }
+.help kbd { font-family: var(--f-ui); font-size: 13px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 7px; background: var(--surface); color: var(--ink); }
+.setrow { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.setrow label { flex: 1; line-height: 1.4; }
+.setrow small { display: block; color: var(--muted); font-size: 14px; }
+.setrow input[type=checkbox] { width: 24px; height: 24px; accent-color: var(--gold); flex: 0 0 auto; }
+
+/* ---------- reader ---------- */
+#reader { position: fixed; inset: 0; z-index: 50; color: var(--glass-ink); overflow: hidden; background: radial-gradient(120% 90% at 50% 45%, #1a1b22 0%, var(--stage) 70%); }
+.stage { position: absolute; inset: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.strip { position: absolute; inset: 0; will-change: transform; transform: translate3d(0,0,0); }
+.slot { position: absolute; top: 0; bottom: 0; width: 100%; display: flex; align-items: center; justify-content: center; gap: 3px; }
+.pv { position: relative; flex: 0 0 auto; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.5), 0 18px 50px -12px rgba(0,0,0,.7); }
+.pv canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.pv canvas.ink { mix-blend-mode: multiply; }
+.pv .mark { position: absolute; left: 0; width: 5px; height: 7%; background: #c9a04f; border-radius: 0 3px 3px 0; box-shadow: 0 0 0 4px rgba(201,160,79,.18); animation: markfade 4.5s ease forwards; }
+@keyframes markfade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+.bar { position: absolute; left: 0; right: 0; background: var(--glass); display: flex; align-items: center; gap: 4px; transition: opacity .25s var(--ease), transform .25s var(--ease); padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); z-index: 3; }
+.bar.topbar { top: 0; padding-top: env(safe-area-inset-top, 0px); min-height: 66px; border-bottom: 1px solid rgba(217,180,108,.18); }
+.bar.botbar { bottom: 0; padding-bottom: env(safe-area-inset-bottom, 0px); min-height: 62px; border-top: 1px solid rgba(217,180,108,.18); }
+#reader.quiet .topbar { opacity: 0; transform: translateY(-12px); pointer-events: none; }
+#reader.quiet .botbar { opacity: 0; transform: translateY(12px); pointer-events: none; }
+.ib { width: 50px; height: 50px; border: 0; border-radius: 14px; background: transparent; color: var(--glass-ink); display: grid; place-items: center; flex: 0 0 auto; transition: background .15s, color .15s; }
+.ib:active { background: rgba(255,255,255,.1); }
+.ib svg { width: 25px; height: 25px; }
+.ib[aria-pressed="true"] { color: var(--glass-gold); background: rgba(217,180,108,.12); }
+.ib:disabled { opacity: .3; }
+.rtitle { flex: 1; min-width: 0; padding: 0 8px; }
+.rtitle b { display: block; font-family: var(--f-title); font-size: 23px; font-weight: 600; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rtitle b .rn { font-family: var(--f-display); color: var(--glass-gold); margin-right: 10px; font-size: 21px; }
+.rtitle > span { display: block; font-size: 13px; opacity: .62; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; letter-spacing: .02em; }
+.sep { width: 1px; height: 28px; background: rgba(255,255,255,.12); margin: 0 4px; }
+.slider { flex: 1; min-width: 60px; accent-color: var(--glass-gold); height: 32px; }
+.pg { font-family: var(--f-display); font-size: 17px; font-variant-numeric: lining-nums tabular-nums; min-width: 96px; text-align: center; white-space: nowrap; }
+.pg small { opacity: .55; font-size: 14px; }
+.spin { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px; border: 2px solid rgba(255,255,255,.14); border-top-color: var(--glass-gold); border-radius: 50%; animation: sp .8s linear infinite; z-index: 2; }
+@keyframes sp { to { transform: rotate(360deg); } }
+.hint { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr 1fr; z-index: 4; pointer-events: none; animation: fade 3s ease forwards; }
+.hint div { display: grid; place-items: center; font-family: var(--f-title); font-size: 24px; font-weight: 600; color: #fff; background: rgba(217,180,108,.13); border-right: 1px dashed rgba(255,255,255,.3); text-align: center; padding: 8px; }
+.hint div:last-child { border-right: 0; }
+@keyframes fade { 0%, 72% { opacity: 1; } 100% { opacity: 0; } }
+
+/* pen palette */
+.penbar { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); z-index: 4; display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: 20px; background: var(--glass); border: 1px solid rgba(217,180,108,.25); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 12px 36px -10px rgba(0,0,0,.7); max-width: calc(100% - 24px); overflow-x: auto; scrollbar-width: none; }
+#reader.quiet .penbar { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+.penbar .ib { width: 48px; height: 48px; }
+.penbar .ib[aria-pressed="true"] { background: rgba(217,180,108,.2); box-shadow: inset 0 0 0 1.5px var(--glass-gold); }
+.dot { width: 22px; height: 22px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255,255,255,.85); }
+.hl-swatch { width: 26px; height: 14px; border-radius: 3px; background: #f3d44d; transform: rotate(-12deg); opacity: .9; }
+#reader.penmode .stage { cursor: crosshair; }
+
+/* ---------- dialogs & toast ---------- */
+.modal { position: fixed; inset: 0; z-index: 100; background: rgba(6,7,10,.55); display: grid; place-items: center; padding: 16px; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.sheet { width: min(540px, 100%); max-height: calc(100% - 32px); overflow: auto; background: var(--surface); color: var(--ink); border-radius: 20px; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 30px 80px -20px rgba(0,0,0,.6); }
+.sheet h3 { margin: 0; font-family: var(--f-display); font-weight: 600; font-size: 24px; }
+.sheet p { margin: 0; color: var(--muted); line-height: 1.5; }
+.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 14px; }
+.field input { height: 50px; border: 1px solid var(--line); border-radius: 12px; padding: 0 14px; background: var(--bg); font-size: 18px; font-weight: 400; }
+.sheet .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.toast { position: fixed; left: 50%; top: calc(18px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 200; background: rgba(16,17,23,.94); color: #efeadf; border: 1px solid rgba(217,180,108,.3); padding: 12px 20px; border-radius: 14px; font-weight: 500; max-width: calc(100% - 32px); box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+.drop { position: fixed; inset: 0; z-index: 150; background: color-mix(in srgb, var(--gold) 20%, transparent); border: 3px dashed var(--gold); display: grid; place-items: center; font-family: var(--f-display); font-size: 28px; color: var(--ink); }
+@media (max-width: 600px) {
+  .row-main { grid-template-columns: 54px 1fr; }
+  .loc { grid-column: 2; }
+  .num { font-size: 20px; }
+  .tally { display: none; }
+  .pg { min-width: 70px; font-size: 15px; }
+  .ib { width: 44px; height: 44px; }
+  .bar .hide-sm { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div id="home">
+  <div class="top">
+    <div class="wrap">
+      <div class="masthead">
+        <div><div class="eyebrow">Pesmarica</div><h1>Slavimo Gospoda</h1></div>
+        <div class="tally" id="tally"></div>
+      </div>
+      <div class="staff" aria-hidden="true"></div>
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="search" inputmode="search" autocomplete="off" spellcheck="false" placeholder="Številka, naslov ali skladatelj …" aria-label="Iskanje pesmi">
+        <button class="clear" id="qclear" aria-label="Počisti iskanje" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-all" data-tab="all" aria-selected="true">Vse pesmi <span class="cnt" id="cnt-all"></span></button>
+        <button class="tab" role="tab" id="tab-fav" data-tab="fav" aria-selected="false">Priljubljene <span class="cnt" id="cnt-fav"></span></button>
+        <button class="tab" role="tab" id="tab-mass" data-tab="mass" aria-selected="false">Maša</button>
+        <button class="tab" role="tab" id="tab-books" data-tab="books" aria-selected="false">Knjige in nastavitve</button>
+      </div>
+    </div>
+  </div>
+  <div class="scroll" id="scroll"><div class="wrap" id="content"></div></div>
+</div>
+
+<div id="reader" hidden>
+  <div class="stage" id="stage">
+    <div class="strip" id="strip"><div class="slot"></div><div class="slot"></div><div class="slot"></div></div>
+    <div class="spin" id="spin" hidden></div>
+  </div>
+  <div class="bar topbar">
+    <button class="ib" id="r-back" aria-label="Nazaj na seznam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <div class="rtitle"><b id="r-title"></b><span id="r-sub"></span></div>
+    <button class="ib" id="r-fav" aria-label="Priljubljena" aria-pressed="false"></button>
+    <button class="ib" id="r-play" aria-label="Zaigraj note" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></button>
+    <button class="ib" id="r-pdf" aria-label="Izvozi pesem kot PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>
+    <button class="ib" id="r-pen" aria-label="Piši po notah" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1.2-4.6L16.5 4.1a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8 4 20z"/><path d="m14.5 6 3.5 3.5"/></svg></button>
+    <span class="sep hide-sm"></span>
+    <button class="ib hide-sm" id="r-edit" aria-label="Naslov te strani"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14M5 9h9M5 14h14M5 19h7"/></svg></button>
+    <button class="ib" id="r-spread" aria-label="Dve strani hkrati" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="8" height="14" rx="1"/><rect x="13" y="5" width="8" height="14" rx="1"/></svg></button>
+    <button class="ib" id="r-fs" aria-label="Cel zaslon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  </div>
+  <div class="bar botbar">
+    <button class="planbtn" id="r-plan-prev" aria-label="Prejšnja pesem v razporedu">‹</button>
+    <button class="ib" id="r-prev" aria-label="Prejšnja stran"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <input class="slider" id="r-slider" type="range" min="1" max="1" value="1" aria-label="Stran">
+    <span class="pg" id="r-pg">1</span>
+    <button class="ib" id="r-next" aria-label="Naslednja stran"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+    <button class="planbtn" id="r-plan-next" aria-label="Naslednja pesem v razporedu">Naslednja ›</button>
+  </div>
+  <div class="playerbar" id="playerbar" hidden>
+    <div class="pl-row"><div class="pl-title" id="pl-title"></div><button class="sb" id="pl-close" aria-label="Zapri predvajalnik">×</button></div>
+    <div class="pl-none">Za to pesem še ni zapisa not, zato je še ne morem zaigrati.<br><button class="btn" id="pl-load">Naloži note te pesmi (MusicXML)</button></div>
+    <div class="pl-row pl-has"><button class="pl-play" id="pl-play" aria-label="Zaigraj"></button><input type="range" id="pl-seek" min="0" max="1" step="0.01" value="0" aria-label="Položaj"><span class="pl-time" id="pl-time"></span></div>
+    <div class="pl-row pl-ctrl pl-has">
+      <div class="grp"><button class="sb" data-bpm="-4" aria-label="Počasneje">−</button><span>tempo<b id="pl-bpm"></b></span><button class="sb" data-bpm="4" aria-label="Hitreje">+</button></div>
+      <div class="grp"><button class="sb" data-tr="-1" aria-label="Nižje za pol tona">−</button><span>tonovsko<b id="pl-tr">0</b></span><button class="sb" data-tr="1" aria-label="Višje za pol tona">+</button></div>
+      <div class="grp" aria-label="Glasovi"><button class="vb" data-voice="0">S</button><button class="vb" data-voice="1">A</button><button class="vb" data-voice="2">T</button><button class="vb" data-voice="3">B</button></div>
+      <button class="sb" id="pl-loop" aria-label="Ponavljaj" aria-pressed="false">⟳</button>
+    </div>
+    <div class="pl-src pl-has" id="pl-src"></div>
+  </div>
+  <div class="penbar" id="penbar" hidden>
+    <button class="ib" data-tool="pen:#16161a" aria-label="Črno pisalo"><span class="dot" style="background:#16161a"></span></button>
+    <button class="ib" data-tool="pen:#c0262d" aria-label="Rdeče pisalo"><span class="dot" style="background:#c0262d"></span></button>
+    <button class="ib" data-tool="pen:#1f4fb8" aria-label="Modro pisalo"><span class="dot" style="background:#1f4fb8"></span></button>
+    <button class="ib" data-tool="hl:#f3d44d" aria-label="Označevalec"><span class="hl-swatch"></span></button>
+    <button class="ib" data-tool="text" aria-label="Besedilo"><span class="tx-glyph">T</span></button>
+    <button class="ib" data-tool="eraser" aria-label="Radirka"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M8.5 19H20M3.8 14.6l8.5-8.5a2 2 0 0 1 2.8 0l3.3 3.3a2 2 0 0 1 0 2.8L12 18.6a2 2 0 0 1-1.4.6H8.4a2 2 0 0 1-1.4-.6l-3.2-3.2a.6.6 0 0 1 0-.8z"/></svg></button>
+    <span class="sep"></span>
+    <button class="ib" id="pen-undo" aria-label="Razveljavi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+    <button class="ib" id="pen-clear" aria-label="Pobriši zapiske na strani"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+    <button class="ib" id="pen-done" aria-label="Končaj pisanje"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></button>
+  </div>
+</div>
+
+<input type="file" id="file" accept="application/pdf,.pdf,.json,application/json" multiple hidden>
+<input type="file" id="xmlfile" accept=".musicxml,.xml,.mxl,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml" hidden>
+<div id="modal-root"></div>
+
+<script src="pdf.min.js"></script>
+<script>
+(() => {
+'use strict';
+/* [številka, naslov, skladatelj, knjiga, stran v PDF, položaj na strani 0–1] */
+const CATALOG = [
+["013","Čuj iz višav veseli glas","Angelik Hribar","I",12,0],
+["014","Kedaj Zveličar prišel boš","Angelik Hribar","I",13,0],
+["015","Dopolnjen je obljube čas","","I",14,0],
+["016","Ni cvetja na tratah ledenih","Vinko Vodopivec","I",15,0.159],
+["017","Oznanil je angel","","I",16,0.495],
+["018","Poslan z nebes je angel 1","","I",17,0.418],
+["019","Poslan z nebes je angel 2","Martin Železnik","I",18,0.28],
+["020","V revi zdihuje celo stvarjenje","Angelik Hribar","I",19,0.401],
+["021","Vi oblaki ga rosite","Gregor Rihar","I",21,0],
+["022","Vso zemljo tema krije 1","","I",22,0.176],
+["023","Vso zemljo tema krije 2","","I",23,0.39],
+["024","Vso zemljo tema krije 3","","I",25,0],
+["025","Zdaj razsvetljena je noč 1","","I",26,0],
+["026","Zdaj razsvetljena je noč 2","","I",27,0.159],
+["027-038","Božična osemdnevnica","Ivan Florjanc","I",28,0],
+["039","Angelsko petje","Ignacij Hladnik","I",48,0.176],
+["040","Božji nam je rojen Sin","Ivan Zupan","I",50,0],
+["041","Dete rajsko Dete sveto","Eleonora Hudovernik","I",51,0],
+["042","Glej zvezdice božje","Leopold Belar","I",52,0],
+["043","Hitite kristani (Adeste fideles)","","I",53,0],
+["044","In povedat so prišli","","I",54,0.253],
+["045","Kaj se vam zdi 1","","I",56,0],
+["046","Kaj se vam zdi 2","","I",57,0],
+["047","Na kamelah jezdijo","France Ačko","I",58,0],
+["048","Nikar ne dremajte","","I",59,0],
+["049","O jaslice borne","","I",60,0],
+["050","Poslušajte vsi ljudje","","I",61,0.159],
+["051","Na polnoči grede","Gregor Rihar","I",62,0],
+["052","Prelepo migljajo zvezdice","Peter Potočnik","I",63,0.187],
+["053","Prišla je lepa sveta noč","","I",64,0],
+["054","Rajske strune","Valentin Štolcer","I",66,0],
+["055","Srečna si štalca","Lojze Mav","I",67,0],
+["056","Tam stoji pa hlevček","France Ačko","I",67,0.736],
+["057","Sveta noč","Franz Gruber","I",68,0.484],
+["058","Zvonček veselo zvoni","Franc Kimovec","I",69,0.28],
+["059","V stajici pri Betlehemu","Gregor Zafošnik","I",70,0],
+["060","Zvonovi zvonijo iz spanja budijo","","I",71,0],
+["061","Imena mi najslajša so","","I",72,0.456],
+["062","Sveta Družina","Anton Foerster","I",73,0.187],
+["063","Vredno častimo","Anton Foerster","I",74,0],
+["065","Daj mi Jezus da žalujem","","I",76,0],
+["066","Kraljevo znamnje križ stoji","Andrej Vavken","I",77,0],
+["067","Angelski zbori","France Cigan","I",78,0],
+["068","Gledam te Zveličar mili","Lojze Mav","I",80,0],
+["069","Marija sedem žalosti","France Ačko","I",80,0.604],
+["070","Na sveto goro Golgoto","","I",81,0.335],
+["071","Križ na gori","Janez Gašparič","I",82,0],
+["072","O premisli človek grešni","Matija Tomc","I",83,0],
+["073","Mati žalostna je stala 1","Franc Kimovec","I",84,0],
+["074","Mati žalostna je stala 2","France Cigan","I",85,0.467],
+["075","Mati žalostna je stala 3","Ivan Florjanc","I",86,0.055],
+["076","O grešna stvar le premišljuj","France Cigan","I",86,0.445],
+["077","Oh prizanesi","David Doktorič","I",87,0],
+["078","Milo milo Jezus prosi","Angelik Hribar","I",88,0],
+["079","Oh kako te vidim Jezus mili","","I",90,0.225],
+["080","Tisočkrat pozdravljena 1","","I",92,0],
+["081","Oljsko goro tiha noč pokriva","Franc Kimovec","I",93,0],
+["082","Tisočkrat pozdravljena 2","Jože Ropitz","I",94,0.121],
+["083","Tam na vrtu Oljske gore 1","Jože Levičnik","I",95,0],
+["084","Tam na vrtu Oljske gore 2","","I",97,0],
+["085","Večerja zadnja je minila","Josip Levičnik","I",98,0],
+["086","V ljubezni goreči","","I",100,0],
+["087","Sprevod na cvetno nedeljo","Lojze Mav","I",101,0.308],
+["088-090","Veliki četrtek","","I",103,0.35],
+["096-099","Veliki petek","","I",107,0.45],
+["105-109","Velika sobota","","I",114,0.1],
+["115-118","Velikonočna vigilija in procesija","","I",126,0],
+["116","Aleluja (velikonočni)","","I",127,0.549],
+["117","Litanije vseh svetnikov","","I",128,0.1],
+["118","Bogu hvala, aleluja, aleluja","","I",130,0.6],
+["119","Današnji žarki zarje mile","Gregor Rihar","I",133,0],
+["120","Dan presveti dan veselja","Andrej Vavken","I",134,0],
+["121","O Marija bodi zdrava","Karlo Adamič","I",135,0.242],
+["122","Danica svetila je v mirno še noč","Gregor Rihar","I",136,0],
+["123","Klic veselja naj osreči","Matija Tomc","I",137,0.401],
+["124","Jezus naš je vstal od smrti","Gregor Rihar","I",138,0],
+["125","Jezus premagavec groba","Ignacij Hladnik","I",139,0],
+["126","Kristus je vstal","Stanko Premrl","I",140,0],
+["127","Zapoj veselo o kristjan","Andrej Vavken","I",141,0.242],
+["128","Minil je dan trpljenja","Karlo Adamič","I",142,0],
+["129","Premisli danes kristjan","Franc Kimovec","I",143,0],
+["130","Raduj nebeška se Gospa","","I",144,0],
+["131","Zvonovi so zopet zapeli","Lojze Mav","I",145,0],
+["132","Poglejte duše grob odprt","","I",146,0.418],
+["133","Skalovje groba se razgane","Leopold Cvek","I",148,0],
+["134","Zveličar gre iz groba","","I",149,0],
+["135","Zveličar naš je vstal iz groba","Gregor Rihar","I",150,0],
+["136","Nad zvezde Kristus hitel je","Gregor Rihar","I",152,0.253],
+["137","O pridi, Sveti Duh, Tolažnik","","I",153,0.72],
+["138","Veni Creator Spiritus","Ivan Florjanc","I",154,0],
+["139","O pridi, Stvarnik, Sveti Duh","","I",154,0.8],
+["140","S skupno pesmijo prosimo","Ludovik Puš","I",155,0.016],
+["141","Sveti Duh posveti nas","Vinko Vodopivec","I",156,0.055],
+["142","Hvali Sion Rešenika","Gregor Rihar","I",158,0.253],
+["143","Praznika svetega danes radujemo se 1","Gregor Rihar","I",159,0.484],
+["144","Praznika svetega danes radujemo se 2","Gregor Rihar","I",161,0],
+["146","Trnova krona","Franc Kimovec","I",163,0.176],
+["147","Božje milostno Srce","Vinko Vodopivec","I",164,0],
+["148","Duhovniško srce imaš Gospod","Ignaz Mitterer","I",165,0],
+["149","Krščanske duše prihitite","Gregor Zafošnik","I",166,0],
+["150","Na nebu in na zemlji","","I",167,0],
+["151","Pojte hribi in doline","Anton Smolka","I",168,0],
+["152","Prečisto Jezusa Srce","Angelik Hribar","I",169,0],
+["153","Presveto Srce slavo 1","Ignacij Hladnik","I",170,0],
+["154","Presveto Srce slavo 2","France Cigan","I",171,0],
+["155","O Srce božje","Matija Tomc","I",172,0.055],
+["156","Kristus mora kraljevati","Alojzij Mihelčič","I",175,0],
+["157","Povsod Boga","Franc Kimovec","I",176,0.225],
+["158","Najvišji vsemogočni Bog","Vinko Vodopivec","I",178,0.066],
+["159","Kristus kralj vseh večnih časov","Vinko Vodopivec","I",179,0.269],
+["160","Bodi nam pozdravljena","Ignacij Hladnik","I",181,0],
+["161","Angeli lepo pojejo","Leopold Cvek","I",182,0.055],
+["162","Cvete cvetlica ena","Karol Klinar","I",183,0.159],
+["163","Češčena milostna si ti","Lojze Mav","I",184,0.374],
+["164","Češčena bodi o Kraljica","Gregor Rihar","I",186,0],
+["165","Danes odprto je sveto nebo","Anton Jobst","I",187,0.055],
+["166","Čista Mati po porodu","Gregor Rihar","I",188,0.418],
+["167","Dajte hribi in doline","Lojze Mav","I",189,0.159],
+["168","Devica Marija poglej zdaj na nas","Matija Tomc","I",190,0],
+["169","Do Marije","Stanko Premrl","I",191,0],
+["170","Jaz sem otrok Marijin","Franc Blažič","I",192,0.055],
+["171","Je angel Gospodov","Franc Kimovec","I",193,0],
+["172","Ko zarja zlati nam gore","Jože Trošt","I",194,0],
+["173","Ko v jasnem pasu primiglja","Gregor Rihar","I",195,0],
+["174","Ko zarja zjutraj se razgrinja","Gregor Rihar","I",196,0.055],
+["175","Kraljica venca rožnega","Lojze Mav","I",197,0.132],
+["176","Lepa si lepa si roža Marija","Vinko Vodopivec","I",198,0.055],
+["177","Marija Mati božja","Miroslav Brumat","I",199,0.187],
+["178","Lepo se jutranja zarja zlati","Matija Tomc","I",200,0],
+["179","Lepšega v nebesih ni","Vinko Vodopivec","I",201,0],
+["180","Marija Mati ljubljena","","I",202,0],
+["181","Marija Mati moja","Lojze Mav","I",203,0],
+["182","Marija o sladko ime","Gregor Rihar","I",204,0],
+["183","Marija nebeška Kraljica","","I",205,0.055],
+["184","Marija pomagaj nam sleherni čas","","I",206,0.055],
+["185","Marija skoz\u0027 življenje","Ignacij Hladnik","I",207,0.066],
+["186","Marija stvarjenja si dika zares","Lojze Mav","I",208,0.055],
+["187","Marija ti pomagaj nam","Franc Kimovec","I",209,0.159],
+["188","Marijo častimo","Ignacij Hladnik","I",210,0.132],
+["189","Naj odkrijem Mati mila","","I",211,0],
+["190","Naj ti zvijem Mati mila","Andrej Vavken","I",212,0],
+["191","O Brezmadežna","O Sanctissima","I",213,0],
+["192","O Devica pomočnica","Avgust Leban","I",214,0],
+["193","O Devica zvezd Kraljica","Leopold Belar","I",215,0],
+["194","O luč nebeška","Matija Tomc","I",216,0.055],
+["195","Od tam kjer sonce vzhaja nam","Jože Trošt","I",217,0.401],
+["196","O Marija blaga mila","","I",218,0],
+["197","O Marija naša Mati","Gregor Rihar","I",219,0],
+["198","O Marija moje želje","Ignacij Hladnik","I",220,0],
+["199","O Marija naša ljuba Mati","Gregor Rihar","I",221,0.055],
+["200","Pozdravljena naša nebeška Kraljica","Stanko Premrl","I",222,0.346],
+["201","Pozdravljena Mati dobrega sveta","Stanko Premrl","I",224,0.253],
+["202","Pred teboj o Mati","Lojze Mav","I",226,0],
+["203","Srce jaz ljubim presladko","Angelik Hribar","I",227,0.055],
+["204","Srce moje","Lojze Mav","I",228,0.159],
+["205","Stotisoč pozdravov","Breda Šček","I",229,0],
+["206","Sveto sveto je Marija tvoje ime","Lojze Mav","I",230,0],
+["207","Še gori ljubezen","Franc Kimovec","I",231,0],
+["208","Tebe Marija želim proslaviti","","I",232,0],
+["209","Ti krasni sončni svit","","I",233,0],
+["210","Ti si tista vsa prečista","Matija Tomc","I",234,0.055],
+["211","Tvoje Srce počastimo","Lojze Mav","I",235,0.269],
+["212","Ti o Marija","Angelik Hribar","I",236,0],
+["213","Večerni zvon","Fran Ferjančič","I",237,0.055],
+["214","Veselimo se kristjani","","I",238,0.214],
+["215","Veš o Marija 1","","I",239,0.253],
+["216","Veš o Marija 2","","I",240,0.269],
+["217","Veš o Marija 3","Blaž Potočnik","I",241,0.346],
+["218","Za Bogom najrajši Marijo častim","Franc Kramar","I",243,0],
+["219","Zdrava zemlje vse Gospa","Gregor Rihar","I",244,0],
+["220","Zmagala si Devica slavna","Matija Tomc","I",245,0.148],
+["221","Vsa lepa si Marija","Alojzij Mihelčič","I",246,0.495],
+["222","Zvonovi zvonijo","Franc Kimovec","I",247,0.484],
+["223","Prišla je Marija","","I",249,0.055],
+["224","Spet kliče nas venčani maj","Andrej Vavken","I",250,0],
+["225","Najčistejša cvetka raja","Lojze Mav","I",251,0.159],
+["226","Cvetke trgam","Andrej Vavken","I",252,0],
+["227","Krasni majnik že razliva 1","","I",253,0],
+["228","Krasni majnik že razliva 2","Andrej Vavken","I",254,0.055],
+["229","Prelepe cvetke trgamo","Lovro Hafner","I",255,0.159],
+["230","Milo zvonijo maja zvonovi","Matija Tomc","I",256,0],
+["231","O Marija ti cvetlica","Andrej Vavken","I",257,0.055],
+["232","Vse prepeva","Andrej Vavken","I",258,0.159],
+["233","Z Bogom dan\u0027s Marija pravi","Gregor Rihar","I",259,0.467],
+["234","Že slavčki žvrgolijo 1","Janez Aiblinger","I",261,0],
+["235","Že slavčki žvrgolijo 2","","I",262,0],
+["236","Ave maris stella","Ivan Florjanc","I",263,0.055],
+["237","Zdrava, morska zvezda","","I",263,0.85],
+["238","Salve Regina","Ivan Florjanc","I",264,0.571],
+["239","Regina caeli","Ivan Florjanc","I",266,0],
+["240","Zadonite","Silvo Mihelič","I",267,0],
+["241","O sveti Jožef","Franc Kimovec","I",268,0],
+["242","O sveti Jezusov rednik","Stanko Premrl","I",269,0],
+["243","Sveti Jožef naš čolnič vesla","Franc Kimovec","I",270,0.055],
+["244","Glej nas tukaj","Silvo Mihelič","I",271,0.297],
+["245","O poglej Alojzij mili","Kamilo Mašek","I",272,0.401],
+["246","Krška Hema","Jože Ropitz","I",274,0.055],
+["247","Počeščena mučenika","Anton Foerster","I",274,0.604],
+["248","V prestol slave vekovite","Ivan Škroup","I",276,0.055],
+["249","Večni Bog, vladar vesolja","","I",277,0],
+["250","Pridi vsa krščanska čreda","Gregor Rihar","I",277,0.467],
+["251","Opevajmo junaka dva","Janez Jurkovič","I",279,0],
+["252","Počeščena sveta Ana","Gregor Rihar","I",280,0],
+["253","Sveta Terezija","Ivan Zdešar","I",281,0],
+["254","O sveta mala Cvetka","Matija Tomc","I",282,0],
+["255","V raju blaženem","","I",283,0],
+["256","Angel božji ki me vodiš","","I",284,0],
+["257","O srečni dom","Stanko Premrl","I",286,0],
+["258","Sveta vernih duš Kraljica","Miroslav Brumat","I",288,0.055],
+["259","Nikolaj zavetnik sveti","","I",289,0.297],
+["260","Zapojmo pesem","Gregor Rihar","I",290,0],
+["261","Tu es Petrus","Ivan Florjanc","I",291,0.055],
+["263","Hvalim te ponižno","Gregor Zafošnik","I",294,0],
+["264","Kristus vate verujemo","Matija Tomc","I",295,0.055],
+["265","V Kristusa ste krščeni","Matija Tomc","I",295,0.484],
+["266","Življenje si mi dal","Gregor Zafošnik","I",296,0.055],
+["283","Maša 1 – Gospod usmili se","Alojzij Mihelčič","II",8,0.084],
+["284","Maša 1 – Slava","Alojzij Mihelčič","II",9,0.425],
+["285","Maša 1 – Svet","Alojzij Mihelčič","II",12,0.039],
+["286","Maša 1 – Jagnje Božje","Alojzij Mihelčič","II",13,0.408],
+["287","Maša 2 – Gospod usmili se","Stanko Premrl","II",14,0.503],
+["288","Maša 2 – Slava","Stanko Premrl","II",15,0.575],
+["289","Maša 2 – Svet","Stanko Premrl","II",18,0.218],
+["290","Maša 2 – Jagnje Božje","Stanko Premrl","II",19,0.218],
+["291","Maša 3 – Gospod usmili se","Ivan Šček","II",19,0.698],
+["292","Maša 3 – Slava","Ivan Šček","II",20,0.229],
+["293","Maša 3 – Svet","Ivan Šček","II",23,0.056],
+["294","Maša 3 – Jagnje Božje","Ivan Šček","II",24,0],
+["295","Maša 4 – Gospod usmili se","Matija Tomc","II",25,0.095],
+["296","Maša 4 – Slava","Matija Tomc","II",26,0.408],
+["297","Maša 4 – Svet","Matija Tomc","II",29,0.397],
+["298","Maša 4 – Jagnje Božje","Matija Tomc","II",30,0.749],
+["299","Maša 5 – Gospod usmili se","Jože Trošt","II",32,0.084],
+["300","Maša 5 – Slava","Jože Trošt","II",33,0.218],
+["301","Maša 5 – Svet","Jože Trošt","II",36,0.575],
+["302","Maša 5 – Jagnje Božje","Jože Trošt","II",37,0.587],
+["303","Maša 6 – Gospod usmili se","Gregor Zafošnik","II",38,0.682],
+["304","Maša 6 – Slava","Gregor Zafošnik","II",39,0.749],
+["305","Maša 6 – Svet","Gregor Zafošnik","II",43,0.5],
+["306","Maša 6 – Jagnje Božje","Gregor Zafošnik","II",44,0.408],
+["307","Maša 7 – Kyrie","Ivan Florjanc","II",45,0.458],
+["308","Maša 7 – Gloria","Ivan Florjanc","II",46,0.218],
+["309","Maša 7 – Credo","Ivan Florjanc","II",49,0.039],
+["310","Maša 7 – Sanctus","Ivan Florjanc","II",53,0.749],
+["311","Maša 7 – Agnus Dei","Ivan Florjanc","II",54,0.587],
+["312","Advent 1","Matija Tomc","II",55,0.162],
+["313","Advent 2","Jože Ropitz","II",56,0.03],
+["314","Božič 1","Gregor Zafošnik","II",57,0.03],
+["315","Božič 2","Matija Tomc","II",58,0.039],
+["316","Gospodovo razglašenje","Vendelin Špendov","II",59,0.039],
+["317","Post 1","Matija Tomc","II",60,0.056],
+["318","Post 2","Jože Ropitz","II",61,0],
+["319","Post 3","Jože Ropitz","II",62,0],
+["320","Veliki teden","Gregor Zafošnik","II",63,0],
+["321","Velika noč 1","Matija Tomc","II",64,0],
+["322","Velika noč 2","Gregor Zafošnik","II",65,0],
+["323","Velika noč 3","Gregor Zafošnik","II",66,0],
+["324","Velika noč 4","Jože Ropitz","II",67,0],
+["325","Binkošti","Matija Tomc","II",68,0],
+["326","Sv. Rešnje telo","Matija Tomc","II",69,0],
+["327","Za Marijine praznike","Matija Tomc","II",70,0],
+["328","Pri mašah za rajne","Jože Ropitz","II",71,0],
+["329","Nedelje med letom 1","Gregor Zafošnik","II",72,0],
+["330","Nedelje med letom 2","Franc Baloh","II",73,0],
+["331","Nedelje med letom 3","Ivan Šček","II",74,0],
+["332","Nedelje med letom 4","Vendelin Špendov","II",75,0],
+["333","Nedelje med letom 5","Vendelin Špendov","II",76,0],
+["334","Nedelje med letom 6","Matija Tomc","II",77,0],
+["335","Nedelje med letom 7","Matija Tomc","II",78,0],
+["336","Nedelje med letom 8","Vendelin Špendov","II",79,0],
+["337","Nedelje med letom 9","Jože Trošt","II",80,0],
+["338","Nedelje med letom 10 – Hvali Gospoda Jeruzalem","Jože Trošt","II",81,0],
+["339","Spevi pred evangelijem – advent","Jože Ropitz","II",82,0.095],
+["340","Spevi pred evangelijem – božič","Anton Foerster","II",82,0.682],
+["341","Spevi pred evangelijem – post 1","Jože Trošt","II",83,0.45],
+["342","Spevi pred evangelijem – post 2","Jože Trošt","II",84,0.056],
+["343","Spevi pred evangelijem – post 3","Jože Trošt","II",84,0.749],
+["344","Spevi pred evangelijem – post 4","Jože Trošt","II",85,0.57],
+["345","Spevi pred evangelijem – velika noč 1","Gregor Rihar","II",86,0.045],
+["346","Spevi pred evangelijem – velika noč 2","Anton Jobst","II",86,0.575],
+["347","Spevi pred evangelijem – binkošti","Vendelin Špendov","II",87,0.045],
+["348","Spevi pred evangelijem – Sv. Rešnje telo","Matija Tomc","II",87,0.575],
+["349","Spevi pred evangelijem – Za Marijine praznike","","II",88,0.55],
+["350","Spevi pred evangelijem – Za praznike svetnikov","Orazio Vecchi","II",89,0.3],
+["351","Spevi pred evangelijem – Nedelje med letom 1","Jože Ropitz","II",89,0.821],
+["352","Spevi pred evangelijem – Nedelje med letom 2","Ivan Florjanc","II",90,0.408],
+["353","Spevi pred evangelijem – Nedelje med letom 3","Ivan Florjanc","II",91,0.03],
+["354","Spevi pred evangelijem – Nedelje med letom 4","Jože Trošt","II",91,0.05],
+["355","Spevi pred evangelijem – Nedelje med letom 5","Peter Planyavsky","II",92,0.8],
+["356","Spevi pred evangelijem – Nedelje med letom 6","Vendelin Špendov","II",92,0],
+["357","Spevi pred evangelijem – Nedelje med letom 7","Taize","II",94,0.056],
+["358","Apostolska vera","Matija Tomc","II",95,0.056],
+["359","Prošnje za vse potrebe","France Ačko","II",97,0.011],
+["360","Vzkliki po povzdigovanju","","II",98,0.045],
+["361","Vzkliki po povzdigovanju","Ivan Florjanc","II",98,0.603],
+["362","Vzkliki po povzdigovanju","Matija Tomc","II",99,0.056],
+["363","Vzkliki po povzdigovanju","Ivan Šček","II",99,0.4],
+["364","Vzkliki po povzdigovanju","Jerko Gržinčič","II",99,0.85],
+["365","Vzkliki po povzdigovanju","Matija Tomc","II",100,0.246],
+["366","Vzkliki po povzdigovanju","Ivan Šček","II",100,0.257],
+["367","Vzkliki po povzdigovanju","Vendelin Špendov","II",101,0.425],
+["368","Vzkliki po povzdigovanju","Matija Tomc","II",102,0.039],
+["369","Amen po evharistični molitvi","","II",102,0.559],
+["370","Amen po evharistični molitvi","","II",102,0.5],
+["371","Oče naš 1","Ivan Florjanc","II",103,0.039],
+["372","Oče naš 2","Ivan Florjanc","II",104,0.408],
+["373","Oče naš 3","France Ačko","II",105,0.587],
+["374","Oče naš 4","Branko Rudež","II",106,0.765],
+["375","Oče naš 5","Ivan Šček","II",108,0.229],
+["376","Oče naš 6","Matija Tomc","II",109,0.603],
+["377","Oče naš 7","Gregor Zafošnik","II",111,0.039],
+["378","Vzkliki po očenašu","Ivan Florjanc","II",113,0.039],
+["379","Vzkliki po očenašu","Matija Tomc","II",113,0.263],
+["380","Vzkliki po očenašu","Vendelin Špendov","II",113,0.464],
+["381","Odpevi","","II",114,0.05],
+["382","Odpevi","","II",114,0.045],
+["383","Bog pred Tvojim veličastvom 1","Gregor Rihar","II",115,0.078],
+["384","Bog pred Tvojim veličastvom 2","Janez Jurkovič","II",117,0],
+["385","K tebi Bog in naš Gospod 1","Lojze Mav","II",118,0],
+["386","K tebi Bog in naš Gospod 2","Lojze Mav","II",119,0.056],
+["387","Ponižno stopimo","Franc Kimovec","II",120,0.358],
+["388","Mir božji objema doline gore","","II",122,0.045],
+["389","O Bog ki si podaril 1","Hugolin Sattner","II",122,0.274],
+["390","O Bog ki si podaril 2","Anton Kosi","II",123,0.492],
+["391","O Bog v nebeški slavi","Franc Kimovec","II",124,0.492],
+["392","Oče večni v visokosti 1","Leopold Belar","II",126,0.039],
+["393","Oče večni v visokosti 2","Jožef Fabian","II",128,0.056],
+["394","Pred Bogom pokleknimo 1","Michael Haydn","II",129,0.492],
+["395","Pred Bogom pokleknimo 2","Janez Jurkovič","II",131,0],
+["396","Pred Bogom pokleknimo 3","Gregor Rihar","II",132,0.039],
+["397","Pred tabo na kolenih","Hugolin Sattner","II",134,0.017],
+["398","Tebe molit Oče večni","Gregor Zafošnik","II",135,0.056],
+["399","Verni kristjani","","II",136,0.352],
+["400","V hišo božjo smo dospeli","","II",138,0],
+["401","Z nebes poglej 1","","II",139,0.056],
+["402","Z nebes poglej 2","","II",141,0],
+["403","Z nebes poglej 3","","II",142,0],
+["404","Zvonovi so zapeli","Hugolin Sattner","II",143,0],
+["405","Prepeval bom Gospodu","","II",144,0.045],
+["406","Bog vsemogočni","","II",144,0.48],
+["407","Bratje molimo","","II",146,0],
+["408","Mašnik k darovanju","Lojze Mav","II",147,0],
+["409","Darujemo Gospod","Gregor Zafošnik","II",148,0.48],
+["410","Oče večni na oltar","Franc Kimovec","II",149,0.5],
+["411","Kruh in vino povzdiguje","France Blažič","II",150,0.039],
+["412","Sprejmi Bog Oče večni","","II",151,0.285],
+["413","Tvoj mašnik zdaj daruje","Michael Haydn","II",152,0.492],
+["414","Večni Oče vse dobrote","Robert Fuehrer","II",154,0],
+["415","Zdaj duhovnik kruh in vino","Gregor Zafošnik","II",155,0],
+["416","Zemlja morje vsa narava","Gregor Zafošnik","II",156,0],
+["417","Zemljo Bog si nam podaril","","II",157,0],
+["418","Zdaj pohitimo pred oltar","","II",158,0],
+["419","Jezus naj živi","","II",159,0.179],
+["420","Bodi hvaljeno češčeno","Ciril Pregelj","II",160,0],
+["421","Bog Oče ki v nebesih","","II",161,0],
+["422","Do tal se priklonimo 1","Gregor Zafošnik","II",162,0],
+["423","Do tal se priklonimo 2","Franc Mihelčič","II",163,0],
+["424","Dajte luči","Breda Šček","II",164,0],
+["425","Hvali svet Odrešenika","Jože Trošt","II",165,0.045],
+["426","Globoko vsi se priklonimo","Ivan Laharnar","II",166,0.201],
+["427","Jezus hoče v srce priti","Franc Kimovec","II",167,0],
+["428","K tebi Jezus ljubeznivi","Andrej Vavken","II",168,0],
+["429","K tebi želim moj Bog","Stanko Premrl","II",169,0],
+["430","Kralj neba je na oltarju","","II",170,0.039],
+["431","Krasota Jezus angelska","Ignacij Hladnik","II",170,0.503],
+["432","Ljubi Jezus tebi mi","Janez Miklošič","II",171,0.5],
+["433","Mogočno se dvigni","Josip Čerin","II",172,0],
+["434","Molite angeli","Franc Kimovec","II",173,0],
+["435","Zapojte hvalnico","","II",174,0.056],
+["436","O dobri Jezus moje vse","Hugolin Sattner","II",174,0.33],
+["437","Gospod moj dobri je pastir","","II",175,0.302],
+["438","O Jezus sladki moj spomin","Blaž Potočnik","II",176,0],
+["439","O kam Gospod 1","","II",177,0],
+["440","O kam Gospod 2","Blaž Potočnik","II",178,0.039],
+["441","O Kralj časti presveti","Matija Tomc","II",180,0],
+["442","Oče naš nebeški","Lojze Mav","II",181,0],
+["443","Ponižno tukaj pokleknimo","Angelik Hribar","II",182,0],
+["444","Pred Gospoda pokleknimo","Ivan Ocvirk","II",183,0],
+["445","Prepevaj hvalo o kristjan","","II",184,0],
+["446","Pridi ljubi Jezus","France Ačko","II",185,0],
+["447","Pridi skoraj Jezus moj","Angelik Hribar","II",186,0],
+["448","Prihitite o kristjani","Gregor Zafošnik","II",187,0],
+["449","Prvi ki natrosi v jutro","Breda Šček","II",188,0],
+["450","Rešnje telo Jezusovo","Franc Blažič","II",189,0],
+["451","Sam nas kličeš","Vinko Vodopivec","II",190,0],
+["452","Tebe ljubi moja duša","","II",191,0],
+["453","Tu v kruhu vse svetosti","Hugolin Sattner","II",192,0],
+["454","Usmiljeni Jezus","Ignacij Hladnik","II",193,0],
+["455","Velik je ta zakrament","Franc Kimovec","II",194,0],
+["456","V tabernaklju tiho bivaš","Vinko Vodopivec","II",195,0],
+["457","Za nas si Jezus se rodil","Jože Trošt","II",196,0.039],
+["458","Zdaj se zbudi duša moja","","II",197,0.246],
+["459","Zdaj bomo videli","Luka Kramolc","II",198,0],
+["460","Živo verjem Jezus v te","Franc Kimovec","II",199,0],
+["461","Duša Kristusova","Vinko Vodopivec","II",200,0],
+["462","O srečna duša blagor ti","Davorin Budna","II",201,0],
+["463","Molim te ponižno 1","Ivan Florjanc","II",202,0],
+["464","Molim te ponižno 2","Anton Hlond","II",203,0],
+["465","Zdaj o duša moja pevaj","Gregor Rihar","II",204,0.056],
+["466","Ubi caritas est vera","Ivan Florjanc","II",204,0.575],
+["467","Ave verum Corpus","Ivan Florjanc","II",206,0.039],
+["470","Glejte sveto","Jože Trošt","II",209,0],
+["471","Častimo te","Anton Foerster","II",210,0],
+["472","Jezus ti si vinska trta","","II",212,0],
+["473","Glasno zapojmo 1","Janez Miklošič","II",213,0],
+["474","Glasno zapojmo 2","","II",214,0.056],
+["475","Ljubi Jezus dan in noč","Matija Tomc","II",215,0.425],
+["476","Nizko se kristjani priklonimo","","II",216,0.05],
+["477","Najsvetejši Tebe počastimo","","II",217,0.5],
+["478","O hvalimo in molimo","","II",218,0.039],
+["479","Pridi pridi duša verna","Matija Tomc","II",219,0.45],
+["480","Pred Jezusa ponižno pokleknimo","","II",220,0],
+["481","Pridi molit o kristjan 1","","II",221,0],
+["482","Slavo Večnemu zapeti","","II",222,0.039],
+["483","Pridi molit o kristjan 2","","II",224,0],
+["484","Tebe molim Jezusa 1","Stanko Premrl","II",225,0],
+["485","Tebe molim Jezusa 2","Anton Foerster","II",226,0.045],
+["486","Pange lingua – Tantum ergo","Ivan Florjanc","II",227,0.162],
+["487","Jezik moj – V zakramentu 1","Angelik Hribar","II",228,0.285],
+["488","Jezik moj – V zakramentu 2","Anton Foerster","II",230,0.045],
+["489","Bog obdaja te svetloba","","II",230,0.765],
+["490","Vsi ponižno počastimo","","II",231,0],
+["491","Hvaljen bodi Bog","Franc Kimovec","II",232,0],
+["497","Bodi pozdravljen nam čas misijona","","II",233,0.134],
+["498","Bodi pozdravljena luč blagovesti","","II",234,0.709],
+["499","Verna duša misli z mano","","II",235,0],
+["500","Bog ki grešnike kaznuješ","Gregor Rihar","II",236,0],
+["501","Kaj bi tebi Oče dali","","II",237,0.05],
+["505","Gospod vodnikov nam daj","Matija Tomc","II",238,0.045],
+["506","Novomašnik bod pozdravljen","Gregor Rihar","II",240,0.056],
+["507","Zlatomašnik bod pozdravljen","Gregor Rihar","II",242,0.045],
+["539","V nebesih sem doma","Gregor Zafošnik","II",244,0],
+["540","Iz globine se glasi 1","","II",245,0.045],
+["541","Iz globine se glasi 2","","II",245,0.5],
+["542","Zvonovi tužno pojejo","","II",246,0.603],
+["543","Človek zdrami srce svoje","","II",247,0.5],
+["544","Kar se rodi na sveti","","II",248,0.039],
+["545","Le sem o grešnik pridi","","II",249,0.151],
+["546","Gospod daruj jim mir","","II",249,0.704],
+["685-692","Gregorjanski tonovski način za petje psalmov","Ivan Florjanc","II",252,0.045],
+["696","Litanije Srca Jezusovega 1","Anton Foerster","II",254,0.559],
+["697","Litanije Srca Jezusovega 2","","II",258,0],
+["698","Jezus mili v vsaki sili","Angelik Hribar","II",260,0.084],
+["699","Kristus kraljuj","Josip Čerin","II",260,0.492],
+["700","Le za Jezusom hodimo","","II",261,0.056],
+["701","Oj bodi hvaljeno","Ignacij Hladnik","II",261,0.464],
+["702","Oj bodi hvaljeno","Angelik Hribar","II",262,0.05],
+["703","O Jezus ljubeznivi","Angelik Hribar","II",262,0.045],
+["704","O Jezus tvoje sladko Srce","Gregor Rihar","II",263,0.246],
+["705","O sladko Srce Jezusa","Stanko Premrl","II",264,0.061],
+["706","Tebi Jezus pojemo","Stanko Premrl","II",264,0.464],
+["707","Tebi o Jezus hočem živeti","Angelik Hribar","II",265,0.05],
+["708","Tebi o Jezus hočem živeti","Vinzenz Goller","II",265,0.056],
+["709","Po tebi o Jezus srce hrepeni","Angelik Hribar","II",266,0.067],
+["710","Srce božje tvoji smo","Anton Smolka","II",266,0.67],
+["722","Lavretanske litanije 1","","II",268,0],
+["723","Lavretanske litanije 2","","II",272,0],
+["724","Božični odpevi – Bodi češčena","","II",274,0.503],
+["725","Božični odpevi – Jezus se joka na glas","","II",275,0.056],
+["726","Božični odpevi – Marija je rodila nam","","II",275,0.453],
+["727","Božični odpevi – Le k njemu hitimo","Leopold Belar","II",276,0.045],
+["728","Božični odpevi – Marija premila češčena si ti","","II",276,0.464],
+["729","Božični odpevi – O Marija ljubezniva","","II",277,0.056],
+["730","Božični odpevi – Tam v štalici opolnoči","Breda Šček","II",277,0.464],
+["731","Božični odpevi – O Mati premila","","II",278,0],
+["732","Božični odpevi – Tja k jaslicam hitimo","","II",279,0.039],
+["733","Božični odpevi – Vsi zapojmo iz srca","","II",279,0.464],
+["734","Velikonočni odpevi – Aleluja veselite se z Marijo","Matija Tomc","II",280,0.08],
+["735","Velikonočni odpevi – Raduj nebeška se Kraljica","","II",280,0.55],
+["736","Velikonočni odpevi – Raduj se angelska Gospa","","II",281,0.246],
+["737","Velikonočni odpevi – Raduj Kraljica se nebes","Vinko Vodopivec","II",282,0.039],
+["738","Velikonočni odpevi – Veselimo se v Gospodu","Matija Tomc","II",282,0.48],
+["739","Velikonočni odpevi – Vstal je Kristus aleluja","Matija Tomc","II",283,0.045],
+["740","Velikonočni odpevi – Žalostna si solze lila","Karlo Adamič","II",283,0.5],
+["741","Velikonočni odpevi – Brezmadežna veseli se","Matija Tomc","II",284,0.056],
+["742","Šmarnični odpevi – O Kraljica majnika","","II",285,0.078],
+["743","Šmarnični odpevi – O Marija ti cvetlica","Angelik Hribar","II",285,0.492],
+["744","Šmarnični odpevi – O Marija rajski cvet","","II",286,0.045],
+["745","Šmarnični odpevi – O ti Kraljica majnika","","II",286,0.453],
+["746","Šmarnični odpevi – Vse rožce na polju","","II",287,0.257],
+["747","Splošni odpevi – Čista vsa brez madeža","Ignacij Hladnik","II",288,0.095],
+["748","Splošni odpevi – Marija k tebi uboge reve","Gregor Rihar","II",288,0.503],
+["749","Splošni odpevi – Kadar pa morali bomo umreti","Vinko Vodopivec","II",289,0],
+["750","Splošni odpevi – Mati premila nebeška Gospa","","II",290,0],
+["751","Splošni odpevi – Mi svoja srca ti damo","Gregor Rihar","II",291,0.045],
+["752","Splošni odpevi – Na gori stanuješ 1","","II",291,0.48],
+["753","Splošni odpevi – Mati usmiljena","Angelik Hribar","II",292,0.1],
+["754","Splošni odpevi – Mati zlata","Lojze Mav","II",292,0.68],
+["755","Splošni odpevi – Na gori stanuješ 2","","II",293,0.45],
+["756","Splošni odpevi – O Devica pomočnica","Franc Kimovec","II",294,0.05],
+["757","Splošni odpevi – O ljuba Gospa","Angelik Hribar","II",294,0.48],
+["758","Splošni odpevi – O Marija o Marija","Gregor Rihar","II",295,0.05],
+["759","Splošni odpevi – O Mati najbolj sveta","","II",295,0.48],
+["760","Splošni odpevi – O svetla zvezdica","Ivan Pogačnik","II",296,0.045],
+["761","Splošni odpevi – Prosi Marija svojega Sina","","II",296,0.464],
+["762","Splošni odpevi – O Marija Mati mila","","II",297,0.05],
+["763","Splošni odpevi – Prosi Marija oj prosi za nas","Andrej Vavken","II",297,0.464],
+["764","Splošni odpevi – Saj lepše rožce nima svet","","II",298,0.05],
+["765","Splošni odpevi – Spočeta brez madeža","","II",298,0.464],
+["766","Splošni odpevi – Ti nebeške ključe imaš","","II",299,0],
+["767","Splošni odpevi – Zapojmo na glas","","II",300,0],
+["768","Splošni odpevi – Zdrava Mati milostna","Gregor Rihar","II",301,0.045],
+["769","Splošni odpevi – Zdrava – Ave","Franc Kimovec","II",301,0.464],
+["773","Križev pot 1","Gregor Rihar","II",302,0],
+["774","S prtom Veronika","","II",304,0.056],
+["775","Na križ ga polože","","II",304,0.397],
+["776","Križev pot 2","Hugolin Sattner","II",304,0.749],
+["777","Rožni venec (veseli del) Duša premisli","Franc Kimovec","II",306,0],
+["778","Rožni venec (žalostni del) Duša le pojdi z mano","Franc Kimovec","II",307,0],
+["779","Rožni venec (častitljivi del) Poveličujmo","Franc Kimovec","II",308,0],
+["780","Rožni venec (veseli del) O Marija ti prečista","Vinko Vodopivec","II",309,0],
+["781","Rožni venec (žalostni del) Lepa roža","Vinko Vodopivec","II",310,0],
+["782","Rožni venec (častitljivi del) O Devica prečastita","Vinko Vodopivec","II",311,0],
+["783-785","Rožni venec – Mariji angel govori","Lojze Mav","II",312,0],
+["786","Tebe večni Bog nebeški","Stanko Premrl","II",314,0],
+["787","Njive so bele","France Cigan","II",315,0.039],
+["788","Hvala večnemu Bogu","Michael Haydn","II",316,0.229],
+["789","Hvali Gospoda","","II",318,0]
+];
+const BOOKS = { "I": { "pages": 304 }, "II": { "pages": 344 } };
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const coll = new Intl.Collator('sl', { sensitivity: 'base', numeric: true });
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = window.NOTNIK_WORKER || 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const ICON_STAR = on => `<svg viewBox="0 0 24 24" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 17l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z"/></svg>`;
+const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 8 5.5z"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4.5" height="14" rx="1"/><rect x="13.5" y="5" width="4.5" height="14" rx="1"/></svg>';
+const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+
+/* ---------------- storage ---------------- */
+const DB = (() => {
+  let dbp = null;
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    try {
+      const req = indexedDB.open('pesmarica', 2);
+      req.onupgradeneeded = () => { for (const n of ['files', 'docs', 'meta', 'ink']) if (!req.result.objectStoreNames.contains(n)) req.result.createObjectStore(n); };
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    } catch (e) { rej(e); }
+  }));
+  const run = async (store, mode, fn) => {
+    const db = await open();
+    return new Promise((res, rej) => {
+      const t = db.transaction(store, mode); const r = fn(t.objectStore(store)); let out;
+      if (r) r.onsuccess = () => { out = r.result; };
+      t.oncomplete = () => res(out); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+    });
+  };
+  return {
+    get: (s, k) => run(s, 'readonly', st => st.get(k)),
+    put: (s, k, v) => run(s, 'readwrite', st => st.put(v, k)),
+    del: (s, k) => run(s, 'readwrite', st => st.delete(k)),
+    all: s => run(s, 'readonly', st => st.getAll()),
+  };
+})();
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem('pesmarica.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('pesmarica.' + k, JSON.stringify(v)); } catch {} },
+};
+
+/* ---------------- state ---------------- */
+const S = {
+  docs: [], songs: [], favs: new Set(), recent: [],
+  tab: 'all', q: '', sort: 'sec', limit: 200, openSecs: new Set(), plans: [], planId: null, play: null, counts: {}, notes: {},
+  settings: { autoFs: false, spread: false, keepAwake: true, hint: true, tool: 'pen:#16161a' },
+  storageOK: true,
+};
+const memFiles = new Map();
+const pdfCache = new Map();
+
+async function saveMeta() {
+  const data = { favs: [...S.favs], recent: S.recent, settings: S.settings, sort: S.sort, plans: S.plans, counts: S.counts };
+  LS.set('meta', data);
+  try { await DB.put('meta', 'main', data); } catch {}
+}
+function docRecord(d) { const { progress, ...rest } = d; return rest; }
+async function saveDoc(d) { try { await DB.put('docs', d.id, docRecord(d)); } catch { storageFailed(); } }
+function storageFailed() { if (S.storageOK) { S.storageOK = false; render(); } }
+
+/* ---------------- songs ---------------- */
+const bookDoc = b => S.docs.find(d => d.book === b) || null;
+function buildSongs() {
+  const list = [];
+  for (const [num, title, comp, book, page, y] of CATALOG) list.push({ key: 'c:' + num, num, title, comp, book, page, y: y || 0, src: 'cat' });
+  for (const d of S.docs) for (const s of d.songs || []) {
+    list.push({ key: 'm:' + d.id + ':' + s.page + ':' + norm(s.title).slice(0, 24), num: '', title: s.title, comp: s.src === 'auto' ? 'najdeno v PDF' : 'dodano ročno', docId: d.id, book: d.book, page: s.page, y: 0, src: s.src });
+  }
+  for (const s of list) { s.n = norm(s.title); s.cn = norm(s.comp); s.nv = parseInt(s.num, 10) || 0; }
+  S.songs = list;
+}
+const songDoc = s => s.docId ? S.docs.find(d => d.id === s.docId) : bookDoc(s.book);
+function cmpSong(a, b) {
+  if (S.sort === 'abc') return coll.compare(a.title, b.title) || a.nv - b.nv;
+  if (a.nv && b.nv) return a.nv - b.nv;
+  if (a.nv) return -1; if (b.nv) return 1;
+  return coll.compare(a.title, b.title);
+}
+function search(q) {
+  const nq = norm(q);
+  const toks = nq.split(' ').filter(Boolean);
+  const isNum = /^\d+$/.test(nq);
+  const res = [];
+  for (const s of S.songs) {
+    let score = -1;
+    if (isNum && s.num) {
+      const [a, b] = s.num.split('-').map(Number); const v = +nq;
+      if (v >= a && v <= (b || a)) score = 0;
+      else if (String(a).startsWith(String(v))) score = 1;
+    }
+    if (score < 0 && toks.length) {
+      const hay = s.n + ' ' + s.cn;
+      if (toks.every(t => hay.includes(t))) {
+        if (s.n.startsWith(nq)) score = 2;
+        else if (toks.every(t => (' ' + s.n).includes(' ' + t))) score = 3;
+        else if (toks.every(t => s.n.includes(t))) score = 4;
+        else score = 5;
+      }
+    }
+    if (score >= 0) res.push([score, s]);
+  }
+  res.sort((x, y) => x[0] - y[0] || cmpSong(x[1], y[1]));
+  return res.map(r => r[1]);
+}
+
+/* ---------------- pdf ---------------- */
+function getPdf(docId) {
+  if (!pdfCache.has(docId)) {
+    const p = (async () => {
+      let blob = memFiles.get(docId);
+      if (!blob) { blob = await DB.get('files', docId); if (!blob) throw new Error('missing'); memFiles.set(docId, blob); }
+      const data = new Uint8Array(await blob.arrayBuffer());
+      return pdfjsLib.getDocument({ data, isEvalSupported: false }).promise;
+    })();
+    p.catch(() => pdfCache.delete(docId));
+    pdfCache.set(docId, p);
+  }
+  return pdfCache.get(docId);
+}
+const LETTER = /\p{L}/u;
+function guessTitle(tc, view) {
+  const y0 = view[1], H = view[3] - view[1];
+  const items = [];
+  for (const it of tc.items) {
+    const s = (it.str || '').replace(/[-]/g, '').trim();
+    if (!s || !LETTER.test(s)) continue;
+    items.push({ s, size: Math.hypot(it.transform[2], it.transform[3]) || Math.abs(it.transform[0]), x: it.transform[4], y: it.transform[5] });
+  }
+  if (!items.length) return null;
+  const sizes = items.map(i => i.size).sort((a, b) => a - b); const med = sizes[sizes.length >> 1];
+  const top = items.filter(i => i.y - y0 > H * 0.55);
+  let best = null; for (const i of top) if (!best || i.size > best.size + 0.01 || (Math.abs(i.size - best.size) <= 0.01 && i.y > best.y)) best = i;
+  if (!best || best.size < med * 1.25) return null;
+  const line = top.filter(i => i.size >= best.size * 0.8 && Math.abs(i.y - best.y) < best.size * 0.7).sort((a, b) => a.x - b.x);
+  const t = line.map(i => i.s).join(' ').replace(/\s+/g, ' ').trim();
+  return t.length >= 2 && t.length <= 90 && !/^\d+$/.test(t) ? t : null;
+}
+async function addFiles(files) {
+  for (const f of [...files].filter(f => /\.json$/i.test(f.name))) await importNotesPack(f);
+  const list = [...files].filter(f => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name));
+  if (!list.length) { if (![...files].some(f => /\.json$/i.test(f.name))) toast('Izberi datoteko PDF.'); return; }
+  for (const f of list) await addFile(f);
+}
+async function addFile(f) {
+  const id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const doc = { id, name: f.name.replace(/\.pdf$/i, ''), size: f.size, pages: 0, book: null, songs: [], added: Date.now(), status: 'busy', progress: 0 };
+  memFiles.set(id, f);
+  S.docs.push(doc); S.tab = 'books'; render();
+  let pdf;
+  try { pdf = await getPdf(id); }
+  catch { S.docs = S.docs.filter(d => d !== doc); memFiles.delete(id); render(); toast(`»${doc.name}« se ne odpre kot PDF.`); return; }
+  doc.pages = pdf.numPages;
+  let book = Object.keys(BOOKS).find(b => BOOKS[b].pages === pdf.numPages) || null;
+  if (!book && /(^|[^a-z])ii([^a-z]|$)/i.test(doc.name)) book = 'II';
+  else if (!book && /(^|[^a-z])i([^a-z]|$)/i.test(doc.name)) book = 'I';
+  if (book) {
+    const old = bookDoc(book);
+    if (old && old !== doc) await removeDoc(old, true);
+    doc.book = book;
+  } else {
+    for (let i = 1; i <= pdf.numPages; i++) {
+      try {
+        const page = await pdf.getPage(i);
+        const t = guessTitle(await page.getTextContent(), page.view);
+        if (t) doc.songs.push({ page: i, title: t, src: 'auto' });
+        page.cleanup();
+      } catch {}
+      if (i % 4 === 0) { doc.progress = i / pdf.numPages; updateProgress(doc); await sleep(0); }
+    }
+  }
+  doc.status = 'ready';
+  try { await DB.put('files', id, f); } catch { storageFailed(); }
+  await saveDoc(doc);
+  buildSongs(); render();
+  toast(book ? `Knjiga ${book} je pripravljena · ${doc.pages} strani` : `»${doc.name}« dodan · ${doc.songs.length} naslovov`);
+}
+async function removeDoc(doc, silent) {
+  S.docs = S.docs.filter(d => d !== doc);
+  const p = pdfCache.get(doc.id); pdfCache.delete(doc.id); memFiles.delete(doc.id);
+  if (p) p.then(x => x.destroy()).catch(() => {});
+  try { await DB.del('files', doc.id); await DB.del('docs', doc.id); } catch {}
+  buildSongs(); if (!silent) { render(); toast(`»${doc.name}« odstranjen`); }
+}
+function updateProgress(doc) {
+  const el = document.querySelector(`[data-progress="${doc.id}"]`);
+  if (el) el.textContent = `Iščem naslove … ${Math.round((doc.progress || 0) * 100)} %`;
+}
+
+/* ---------------- home rendering ---------------- */
+const content = $('#content');
+const numLabel = n => esc(String(n).replace('-', '–'));
+function locLabel(s) {
+  const d = songDoc(s);
+  if (!d) return `<span class="loc missing">${s.book ? 'knjiga ' + s.book + ' ni naložena' : 'PDF manjka'}</span>`;
+  return `<span class="loc"><i>${d.book ? d.book : esc(d.name.slice(0, 12))}</i>str. ${s.page}</span>`;
+}
+function rowHtml(s) {
+  const fav = S.favs.has(s.key);
+  return `<li class="row"><button class="row-main" data-open="${esc(s.key)}">
+    <span class="num${s.num.includes('-') ? ' range' : ''}">${numLabel(s.num)}</span>
+    <span class="tt"><b>${esc(s.title)}${isPop(s) ? '<em class="pop">znana</em>' : ''}</b>${s.comp ? `<span>${esc(s.comp)}</span>` : ''}</span>
+    ${locLabel(s)}</button>
+    <button class="star" data-fav="${esc(s.key)}" aria-pressed="${fav}" aria-label="${fav ? 'Odstrani iz priljubljenih' : 'Dodaj med priljubljene'}">${ICON_STAR(fav)}</button></li>`;
+}
+/* sklopi po natisnjenem pregledu pesmarice (knjiga I str. 298–303, knjiga II str. 619–625 in 647) */
+const SECTIONS = [
+  ['Cerkveno leto', 'Adventni čas', [[13, 26]]],
+  ['', 'Božična osemdnevnica (17.–24. dec.)', [[27, 38]]],
+  ['', 'Božični čas', [[39, 63]]],
+  ['', 'Postni čas', [[65, 86]]],
+  ['', 'Cvetna nedelja', [[87, 87]]],
+  ['', 'Velikonočno tridnevje', [[88, 115], [117, 117]]],
+  ['', 'Velikonočni čas', [[116, 116], [118, 135]]],
+  ['', 'Binkošti', [[136, 141]]],
+  ['', 'Sv. Rešnje telo in kri', [[142, 144]]],
+  ['', 'Srce Jezusovo', [[145, 155]]],
+  ['', 'Kristus Kralj', [[156, 159]]],
+  ['Marija in svetniki', 'Marijine pesmi', [[160, 223]]],
+  ['', 'Šmarnične pesmi', [[224, 235]]],
+  ['', 'Latinske pesmi', [[236, 239]]],
+  ['', 'Svetniške pesmi', [[240, 261]]],
+  ['Zakramenti', 'Sveti krst', [[263, 266]]],
+  ['', 'Maše', [[283, 311]]],
+  ['', 'Psalmi po berilu', [[312, 338]]],
+  ['', 'Spevi pred evangelijem', [[339, 357]]],
+  ['', 'Vera, vzkliki, očenaš, odpevi', [[358, 382]]],
+  ['', 'Mašne pesmi (začetek maše)', [[383, 405]]],
+  ['', 'Darovanjske pesmi', [[406, 418]]],
+  ['', 'Obhajilne pesmi', [[419, 460]]],
+  ['', 'Poobhajilne pesmi', [[461, 467]]],
+  ['', 'Blagoslovne pesmi', [[470, 491]]],
+  ['', 'Zakrament sprave (misijon)', [[497, 501]]],
+  ['', 'Mašniško posvečenje', [[505, 507]]],
+  ['', 'Pogreb', [[539, 546]]],
+  ['Pobožnosti', 'Gregorijanski tonovski načini', [[685, 692]]],
+  ['', 'Litanije Srca Jezusovega in odpevi', [[696, 710]]],
+  ['', 'Lavretanske litanije in odpevi', [[722, 769]]],
+  ['', 'Križev pot', [[773, 776]]],
+  ['', 'Rožni venec', [[777, 785]]],
+  ['', 'Misijonska nedelja', [[786, 787]]],
+  ['', 'Zahvalne pesmi', [[788, 789]]],
+];
+const secOf = s => { const v = s.nv; if (!v) return -1; return SECTIONS.findIndex(x => x[2].some(([a, b]) => v >= a && v <= b)); };
+const ICON_CHEV = '<svg class="sec-c" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+function sectionsHtml() {
+  const groups = SECTIONS.map(() => []), other = [];
+  for (const s of S.songs) { const i = secOf(s); (i < 0 ? other : groups[i]).push(s); }
+  const byNum = (a, b) => a.nv - b.nv || coll.compare(a.title, b.title);
+  const block = (key, title, items) => {
+    items.sort(byNum);
+    const nums = items.filter(x => x.nv);
+    const range = nums.length ? (nums[0].num.split('-')[0] === nums[nums.length - 1].num.split('-').pop() ? nums[0].num.split('-')[0] : `${nums[0].num.split('-')[0]}–${nums[nums.length - 1].num.split('-').pop()}`) : '';
+    const open = S.openSecs.has(key);
+    return `<details class="sec" data-sec="${key}"${open ? ' open' : ''}><summary>${ICON_CHEV}<span class="sec-t">${esc(title)}</span><span class="sec-m">${range ? range + ' · ' : ''}${items.length}</span></summary>${open ? `<ul class="list">${items.map(rowHtml).join('')}</ul>` : ''}</details>`;
+  };
+  let h = '<div class="secs">';
+  SECTIONS.forEach(([part, title], i) => {
+    if (part) h += `<h3 class="sec-part">${esc(part)}</h3>`;
+    if (groups[i].length) h += block(String(i), title, groups[i]);
+  });
+  if (other.length) h += `<h3 class="sec-part">Drugo</h3>` + block('x', 'Ročno dodani naslovi', other);
+  return h + '</div>';
+}
+
+/* ---------------- znane pesmi in razpored za mašo ---------------- */
+/* Izbor splošno znanih pesmi (ni statistika petja). Aplikacija ga dopolni s tem, kar sam največkrat odpreš ali daš v razpored. */
+const CLASSICS = new Set(['018','021','039','042','043','050','054','056','057','066','073','081','131','133','134','135','137','142','156','157','171','176','184','185','213','224','227','238','392','394','409','460','486','487','506','539','788']);
+const isPop = s => !!s.num && CLASSICS.has(s.num);
+const songByKey = k => S.songs.find(x => x.key === k);
+const secIdx = name => SECTIONS.findIndex(x => x[1] === name);
+const inSecs = (s, names) => { const i = secOf(s); return i >= 0 && names.includes(SECTIONS[i][1]); };
+function easter(y) { const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1; return new Date(y, mo - 1, da); }
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+function season(d) {
+  d = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const y = d.getFullYear(), E = easter(y);
+  const xmas = new Date(y, 11, 25), adv1 = addDays(xmas, -(xmas.getDay() || 7) - 21);
+  const ep = new Date(y, 0, 6), baptism = addDays(ep, 7 - ep.getDay());
+  if (d >= new Date(y, 11, 25) || d <= baptism) return { name: 'Božični čas', secs: ['Božični čas'] };
+  if (d >= adv1) return { name: 'Adventni čas', secs: d >= new Date(y, 11, 17) ? ['Božična osemdnevnica (17.–24. dec.)', 'Adventni čas'] : ['Adventni čas'] };
+  if (d >= addDays(adv1, -7)) return { name: 'Kristus Kralj', secs: ['Kristus Kralj'] };
+  const ash = addDays(E, -46);
+  if (d >= ash && d < addDays(E, -7)) return { name: 'Postni čas', secs: ['Postni čas'] };
+  if (+d === +addDays(E, -7)) return { name: 'Cvetna nedelja', secs: ['Cvetna nedelja', 'Postni čas'] };
+  if (d > addDays(E, -7) && d < E) return { name: 'Veliki teden', secs: ['Velikonočno tridnevje', 'Postni čas'] };
+  if (d >= E && d <= addDays(E, 49)) return { name: 'Velikonočni čas', secs: d >= addDays(E, 42) ? ['Binkošti', 'Velikonočni čas'] : ['Velikonočni čas'] };
+  if (d > addDays(E, 49) && d <= addDays(E, 63)) return { name: 'Sv. Rešnje telo', secs: ['Sv. Rešnje telo in kri'] };
+  if (d > addDays(E, 63) && d <= addDays(E, 70)) return { name: 'Srce Jezusovo', secs: ['Srce Jezusovo'] };
+  if (d.getMonth() === 4) return { name: 'Šmarnice (maj)', secs: ['Šmarnične pesmi'] };
+  return { name: 'Čas med letom', secs: [] };
+}
+const SLOTS = [
+  { id: 'vstop', t: 'Vstop', secs: ['Mašne pesmi (začetek maše)'], seas: true },
+  { id: 'kyrie', t: 'Gospod, usmili se', secs: ['Maše'], f: /usmili|kyrie/i },
+  { id: 'gloria', t: 'Slava', secs: ['Maše'], f: /slava|gloria/i, noIn: ['Adventni čas', 'Postni čas', 'Veliki teden', 'Cvetna nedelja'] },
+  { id: 'psalm', t: 'Psalm', secs: ['Psalmi po berilu'] },
+  { id: 'evang', t: 'Pred evangelijem', secs: ['Spevi pred evangelijem'] },
+  { id: 'credo', t: 'Vera', secs: ['Maše', 'Vera, vzkliki, očenaš, odpevi'], f: /credo|vera/i, opt: true },
+  { id: 'dar', t: 'Darovanje', secs: ['Darovanjske pesmi'], seas: true },
+  { id: 'sanctus', t: 'Svet', secs: ['Maše'], f: /–\s*(svet|sanctus)/i },
+  { id: 'vzklik', t: 'Po povzdigovanju', secs: ['Vera, vzkliki, očenaš, odpevi'], f: /povzdig/i, opt: true },
+  { id: 'ocenas', t: 'Očenaš', secs: ['Vera, vzkliki, očenaš, odpevi'], f: /oče naš|očenaš/i, opt: true },
+  { id: 'agnus', t: 'Jagnje božje', secs: ['Maše'], f: /jagnje|agnus/i },
+  { id: 'obh', t: 'Obhajilo', secs: ['Obhajilne pesmi'] },
+  { id: 'zahv', t: 'Po obhajilu', secs: ['Poobhajilne pesmi', 'Zahvalne pesmi'] },
+  { id: 'sklep', t: 'Sklep', secs: ['Marijine pesmi', 'Šmarnične pesmi', 'Latinske pesmi'], seas: true },
+];
+const SEAS_WORD = { 'Adventni čas': /advent/i, 'Božični čas': /božič/i, 'Postni čas': /post/i, 'Cvetna nedelja': /post|veliki teden/i, 'Veliki teden': /veliki teden|post/i, 'Velikonočni čas': /velika noč/i, 'Kristus Kralj': /med letom/i, 'Čas med letom': /med letom/i, 'Sv. Rešnje telo': /rešnje telo/i, 'Šmarnice (maj)': /marijin/i, 'Srce Jezusovo': /med letom/i };
+const planDate = pl => pl.date ? new Date(pl.date + 'T12:00') : new Date();
+const usage = s => S.counts[s.key] || 0;
+const rankSongs = arr => arr.sort((a, b) => (isPop(b) - isPop(a)) * 2 + Math.sign(usage(b) - usage(a)) || a.nv - b.nv);
+function slotCandidates(slot, pl) {
+  const se = season(planDate(pl));
+  let base = S.songs.filter(s => inSecs(s, slot.secs) && (!slot.f || slot.f.test(s.title)));
+  const w = SEAS_WORD[se.name];
+  if (w && (slot.id === 'psalm' || slot.id === 'evang')) { const m = base.filter(s => w.test(s.title)); if (m.length) base = [...m, ...base.filter(s => !w.test(s.title))]; }
+  const seasonal = slot.seas && se.secs.length ? rankSongs(S.songs.filter(s => inSecs(s, se.secs))) : [];
+  return { se, seasonal, base: (slot.id === 'psalm' || slot.id === 'evang') ? base : rankSongs(base) };
+}
+function nextSunday() { const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7)); return d.toISOString().slice(0, 10); }
+const fmtDate = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${+d}. ${+m}. ${y}`; };
+const curPlan = () => S.plans.find(p => p.id === S.planId) || null;
+const planSeq = pl => SLOTS.flatMap(sl => (pl.slots[sl.id] || []).map(k => ({ slot: sl, key: k }))).filter(x => songByKey(x.key));
+function popularHtml() {
+  const se = season(new Date());
+  const pops = S.songs.filter(isPop);
+  const seas = se.secs.length ? pops.filter(s => inSecs(s, se.secs)) : [];
+  const mine = S.songs.filter(s => usage(s) >= 2).sort((a, b) => usage(b) - usage(a)).slice(0, 10);
+  const pick = [...seas, ...pops.filter(s => !seas.includes(s))].slice(0, 14);
+  const card = (s, extra) => `<button data-open="${esc(s.key)}"><span class="n">${numLabel(s.num) || '·'}</span><span class="t">${esc(s.title)}</span><span class="pc">${extra}</span></button>`;
+  let h = '';
+  if (mine.length) h += `<div class="section-head"><h2>Tvoje največkrat odprte</h2></div><div class="recent">${mine.map(s => card(s, usage(s) + '× odprta')).join('')}</div>`;
+  h += `<div class="section-head"><h2>Znane pesmi${seas.length ? `<em>${esc(se.name)}</em>` : ''}</h2></div><div class="recent">${pick.map(s => card(s, SECTIONS[secOf(s)]?.[1] || '')).join('')}</div>`;
+  return h;
+}
+function massHtml() {
+  const pl = curPlan();
+  if (pl) return planHtml(pl);
+  let h = `<div class="section-head"><h2>Razporedi za mašo${S.plans.length ? `<em>${S.plans.length}</em>` : ''}</h2><button class="btn primary" data-newplan>${ICON_PLUS}Nov razpored</button></div>`;
+  if (!S.plans.length) return h + `<div class="empty"><strong>Še ni razporeda</strong>Ustvari razpored, izberi pesmi za vsak del maše (vstop, darovanje, obhajilo …) in jih med mašo odpiraš po vrsti z gumbom »Naslednja«.</div>`;
+  h += '<div class="plans">';
+  for (const p of [...S.plans].sort((a, b) => (b.date || '').localeCompare(a.date || ''))) {
+    const n = planSeq(p).length;
+    h += `<div class="plan-card"><div class="pi"><b>${esc(p.name || 'Maša')}</b><span>${fmtDate(p.date)}${p.date ? ' · ' : ''}${n} ${n === 1 ? 'pesem' : n === 2 ? 'pesmi' : n < 5 ? 'pesmi' : 'pesmi'}</span></div>
+      <button class="btn" data-editplan="${p.id}">Uredi</button><button class="btn primary" data-playplan="${p.id}" ${n ? '' : 'disabled'}>Začni ▸</button></div>`;
+  }
+  return h + '</div>';
+}
+function planHtml(pl) {
+  const se = season(planDate(pl));
+  const n = planSeq(pl).length;
+  let h = `<button class="linkback" data-planback>‹ Vsi razporedi</button>
+  <div class="plan-head"><div class="fields"><input type="text" data-plname value="${esc(pl.name)}" aria-label="Ime razporeda" placeholder="Ime, npr. Nedeljska maša"><input type="date" data-pldate value="${esc(pl.date || '')}" aria-label="Datum maše"></div>
+  <div class="plan-season">Liturgični čas: <b>${esc(se.name)}</b>${se.secs.length ? ' · predlogi za vstop, darovanje in sklep upoštevajo ta čas' : ''}</div>
+  <div class="plan-actions"><button class="btn primary" data-playplan="${pl.id}" ${n ? '' : 'disabled'}>Začni mašo ▸</button><button class="btn" data-autofill>Predlagaj prazne dele</button><button class="btn" data-planpdf ${n ? '' : 'disabled'}>Izvozi PDF</button><button class="btn danger" data-delplan="${pl.id}">Izbriši</button></div></div>
+  <ol class="slots">`;
+  let idx = 0;
+  for (const sl of SLOTS) {
+    const keys = (pl.slots[sl.id] || []).filter(k => songByKey(k));
+    h += `<li class="slotrow"><h4>${esc(sl.t)}</h4><div class="picks">`;
+    for (const k of keys) { const s = songByKey(k); h += `<div class="pick"><button data-playat="${idx++}" aria-label="Odpri ${esc(s.title)}"><span class="n">${numLabel(s.num) || '·'}</span><span class="t">${esc(s.title)}</span></button><button class="x" data-unpick="${sl.id}|${esc(k)}" aria-label="Odstrani">×</button></div>`; }
+    h += `<button class="addpick" data-pickslot="${sl.id}">+ ${keys.length ? 'Dodaj še' : 'Izberi pesem'}</button></div></li>`;
+  }
+  return h + '</ol>';
+}
+function newPlan() {
+  const d = nextSunday();
+  const pl = { id: 'p' + Date.now().toString(36), name: 'Maša ' + fmtDate(d), date: d, slots: {} };
+  S.plans.push(pl); S.planId = pl.id; saveMeta(); render(); $('#scroll').scrollTop = 0;
+}
+function addToSlot(pl, slotId, key) {
+  const arr = pl.slots[slotId] = pl.slots[slotId] || [];
+  if (!arr.includes(key)) arr.push(key);
+  S.counts[key] = (S.counts[key] || 0) + 1;
+  saveMeta();
+}
+function autofill(pl) {
+  const se = season(planDate(pl));
+  const used = new Set(Object.values(pl.slots).flat());
+  // ordinarij iz iste maše
+  const ord = ['kyrie', 'gloria', 'sanctus', 'agnus'];
+  if (ord.every(id => !(pl.slots[id] || []).length)) {
+    const masses = [...new Set(S.songs.filter(s => inSecs(s, ['Maše'])).map(s => (s.title.match(/^Maša (\d+)/) || [])[1]).filter(Boolean))];
+    const score = m => S.songs.filter(s => s.title.startsWith('Maša ' + m + ' ')).reduce((a, s) => a + usage(s), 0);
+    masses.sort((a, b) => score(b) - score(a) || a - b);
+    const m = masses[0];
+    if (m) for (const id of ord) {
+      const sl = SLOTS.find(x => x.id === id);
+      if (sl.noIn && sl.noIn.includes(se.name)) continue;
+      const s = S.songs.find(x => x.title.startsWith('Maša ' + m + ' ') && sl.f.test(x.title));
+      if (s) { pl.slots[id] = [s.key]; used.add(s.key); }
+    }
+  }
+  for (const sl of SLOTS) {
+    if (sl.opt || (pl.slots[sl.id] || []).length || ord.includes(sl.id)) continue;
+    if (sl.id === 'psalm') continue; // psalm je vezan na berila dneva
+    if (sl.noIn && sl.noIn.includes(se.name)) continue;
+    const { seasonal, base } = slotCandidates(sl, pl);
+    const pool = [...(sl.id === 'vstop' || sl.id === 'sklep' ? seasonal : []), ...base, ...(sl.id === 'dar' ? seasonal : [])];
+    const s = pool.find(x => !used.has(x.key) && songDoc(x) !== undefined);
+    if (s) { pl.slots[sl.id] = [s.key]; used.add(s.key); }
+  }
+  saveMeta(); render();
+  toast('Prazni deli so zapolnjeni. Psalm izberi po berilih dneva.');
+}
+function openPicker(pl, slotId) {
+  const sl = SLOTS.find(x => x.id === slotId);
+  const { se, seasonal, base } = slotCandidates(sl, pl);
+  const used = new Set(pl.slots[slotId] || []);
+  const item = s => `<button data-pk="${esc(s.key)}"><span class="n">${numLabel(s.num) || '·'}</span><span class="t">${esc(s.title)}${isPop(s) ? '<em class="pop">znana</em>' : ''}</span><span class="c">${usage(s) ? usage(s) + '×' : ''}</span></button>`;
+  const listFor = q => {
+    if (q) { const r = search(q).slice(0, 60); return r.length ? `<h5>Zadetki</h5>${r.map(item).join('')}` : '<p>Ni zadetkov.</p>'; }
+    let h = '';
+    if (seasonal.length) h += `<h5>${esc(se.name)}</h5>${seasonal.filter(s => !used.has(s.key)).map(item).join('')}`;
+    h += `<h5>${esc(sl.t)}</h5>${base.filter(s => !used.has(s.key)).map(item).join('')}`;
+    return h;
+  };
+  modal(`<div class="picker" style="display:flex;flex-direction:column;gap:12px"><h3>${esc(sl.t)}</h3><input type="search" placeholder="Išči vse pesmi: številka ali naslov" aria-label="Išči pesem"><div class="plist">${listFor('')}</div><div class="actions"><button class="btn" data-close>Zapri</button></div></div>`, (m, close) => {
+    const inp = m.querySelector('input'), list = m.querySelector('.plist');
+    let t = 0; inp.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { list.innerHTML = listFor(inp.value.trim()); }, 120); });
+    m.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.pk) { addToSlot(pl, slotId, b.dataset.pk); close(); render(); }
+      else if (b.hasAttribute('data-close')) close();
+    });
+  });
+}
+function playPlan(pl, at = 0) {
+  const seq = planSeq(pl); if (!seq.length) return;
+  S.play = { id: pl.id, idx: Math.min(at, seq.length - 1) };
+  const s = songByKey(seq[S.play.idx].key); if (s) openSong(s);
+}
+function planStep(d) {
+  if (!S.play) return;
+  const pl = S.plans.find(p => p.id === S.play.id); if (!pl) return;
+  const seq = planSeq(pl); const i = S.play.idx + d;
+  if (i < 0 || i >= seq.length) { toast(i < 0 ? 'To je prva pesem razporeda' : 'Konec razporeda'); return; }
+  S.play.idx = i; const s = songByKey(seq[i].key); if (s) openSong(s, true);
+}
+function updatePlanBar() {
+  const on = !!(S.play && R.open);
+  reader.classList.toggle('inplan', on);
+  if (!on) return;
+  const pl = S.plans.find(p => p.id === S.play.id); const seq = pl ? planSeq(pl) : [];
+  const cur = seq[S.play.idx], nx = seq[S.play.idx + 1];
+  $('#r-plan-next').textContent = nx ? `${nx.slot.t} ›` : 'Konec';
+  $('#r-plan-next').disabled = !nx;
+  $('#r-plan-prev').disabled = S.play.idx <= 0;
+  if (cur) $('#r-sub').textContent = `${cur.slot.t} · ${S.play.idx + 1}/${seq.length}` + ($('#r-sub').textContent ? ' · ' + $('#r-sub').textContent : '');
+}
+
+/* ---------------- obseg pesmi, izvoz PDF ---------------- */
+let rangeCache = { k: '', m: new Map() };
+function songRange(s) {
+  const d = songDoc(s); if (!d) return null;
+  const ck = S.songs.length + '|' + S.docs.length;
+  if (rangeCache.k !== ck) rangeCache = { k: ck, m: new Map() };
+  if (rangeCache.m.has(s.key)) return rangeCache.m.get(s.key);
+  const list = songsOf(d); const i = list.indexOf(s);
+  let end = s.page;
+  for (let j = i + 1; j < list.length; j++) {
+    const n = list[j];
+    if (n.page > s.page) { end = (n.y && n.y > 0.12) ? n.page : n.page - 1; break; }
+  }
+  const r = { doc: d, from: s.page, to: Math.min(Math.max(end, s.page), s.page + 11) };
+  rangeCache.m.set(s.key, r);
+  return r;
+}
+function visibleSongs() {
+  if (!R.doc) return [];
+  const vis = R.pdf ? visible() : [R.page]; if (!vis.length) return [];
+  const a = vis[0], b = vis[vis.length - 1];
+  return songsOf(R.doc).filter(s => { const r = songRange(s); return r && r.to >= a && r.from <= b; });
+}
+async function loadPdfLib() {
+  if (window.PDFLib) return;
+  await new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'pdf-lib.min.js'; sc.onload = ok; sc.onerror = no; document.head.append(sc); });
+}
+function inkPng(strokes, w, h) {
+  const sc = 2.5, c = document.createElement('canvas'); c.width = Math.round(w * sc); c.height = Math.round(h * sc);
+  const ctx = c.getContext('2d');
+  for (const st of strokes) drawStroke(ctx, st, c.width, c.height);
+  return fetch(c.toDataURL('image/png')).then(r => r.arrayBuffer());
+}
+const safeName = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 80);
+async function exportSongs(songs, fname) {
+  if (!songs.length) return;
+  toast('Pripravljam PDF …');
+  let file;
+  try {
+    await loadPdfLib();
+    const out = await PDFLib.PDFDocument.create();
+    out.setTitle(fname.replace(/\.pdf$/, ''));
+    const srcs = new Map(); let pages = 0;
+    for (const s of songs) {
+      const r = songRange(s); if (!r) continue;
+      let src = srcs.get(r.doc.id);
+      if (!src) {
+        const blob = memFiles.get(r.doc.id) || await DB.get('files', r.doc.id);
+        if (!blob) throw new Error('missing');
+        src = await PDFLib.PDFDocument.load(await blob.arrayBuffer(), { ignoreEncryption: true });
+        srcs.set(r.doc.id, src);
+      }
+      const idx = []; for (let p = r.from; p <= r.to; p++) idx.push(p - 1);
+      const copied = await out.copyPages(src, idx);
+      for (let k = 0; k < copied.length; k++) {
+        const pg = out.addPage(copied[k]); pages++;
+        const strokes = await loadInk(r.doc.id + ':' + (idx[k] + 1));
+        if (strokes && strokes.length) {
+          const { width, height } = pg.getSize();
+          const img = await out.embedPng(await inkPng(strokes, width, height));
+          pg.drawImage(img, { x: 0, y: 0, width, height });
+        }
+      }
+    }
+    const bytes = await out.save();
+    file = new File([bytes], fname, { type: 'application/pdf' });
+    toastEl && (toastEl.hidden = true);
+    const kb = Math.round(bytes.length / 1024);
+    modal(`<h3>PDF je pripravljen</h3><p>${esc(fname)} · ${pages} ${pages === 1 ? 'stran' : pages === 2 ? 'strani' : pages < 5 ? 'strani' : 'strani'} · ${kb > 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb + ' KB'}${songs.length === 1 ? '' : ` · ${songs.length} pesmi`}</p>
+      <div class="actions"><button class="btn" data-x>Zapri</button><button class="btn" data-dl>Shrani</button>${navigator.canShare && navigator.canShare({ files: [file] }) ? '<button class="btn primary" data-share>Deli / kopiraj</button>' : ''}</div>`, (m, close) => {
+      m.addEventListener('click', async e => {
+        const b = e.target.closest('button'); if (!b) return;
+        if (b.hasAttribute('data-x')) close();
+        if (b.hasAttribute('data-dl')) { const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = fname; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000); close(); }
+        if (b.hasAttribute('data-share')) { try { await navigator.share({ files: [file], title: fname.replace(/\.pdf$/, '') }); close(); } catch (err) { if (err.name !== 'AbortError') toast('Deljenje ni uspelo · uporabi Shrani'); } }
+      });
+    });
+  } catch (e) { console.error(e); toast('PDF-ja ni bilo mogoče pripraviti'); }
+}
+const songFileName = s => safeName(`${s.num ? s.num + ' ' : ''}${s.title}`) + '.pdf';
+function songActions(list, mode) {
+  const item = s => { const fav = S.favs.has(s.key); const r = songRange(s);
+    return `<div class="sp"><span class="n">${numLabel(s.num) || '·'}</span><span class="t">${esc(s.title)}<small>${r ? (r.from === r.to ? 'str. ' + r.from : 'str. ' + r.from + '–' + r.to) : ''}</small></span>
+    <button class="btn" data-sfav="${esc(s.key)}" aria-pressed="${fav}" aria-label="Priljubljena">${ICON_STAR(fav)}</button>
+    <button class="btn" data-splay="${esc(s.key)}" aria-label="Zaigraj">${ICON_PLAY}</button><button class="btn" data-spdf="${esc(s.key)}">PDF</button></div>`; };
+  modal(`<h3>${mode === 'pdf' ? 'Katero pesem izvozim?' : mode === 'play' ? 'Katero pesem zaigram?' : 'Pesmi na tem zaslonu'}</h3><div class="songpick">${list.map(item).join('')}</div>
+    ${list.length > 1 ? '<div class="actions"><button class="btn" data-pdfall>Vse v en PDF</button><button class="btn" data-x>Zapri</button></div>' : '<div class="actions"><button class="btn" data-x>Zapri</button></div>'}`, (m, close) => {
+    m.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.sfav) { toggleFav(b.dataset.sfav); const on = S.favs.has(b.dataset.sfav); b.setAttribute('aria-pressed', on); b.innerHTML = ICON_STAR(on); updateChrome(); }
+      else if (b.dataset.splay) { const s = songByKey(b.dataset.splay); close(); if (s) openPlayer(s); }
+      else if (b.dataset.spdf) { const s = songByKey(b.dataset.spdf); close(); if (s) exportSongs([s], songFileName(s)); }
+      else if (b.hasAttribute('data-pdfall')) { close(); exportSongs(list, safeName(list.map(x => x.num).filter(Boolean).join(', ') + ' ' + list[0].title) + '.pdf'); }
+      else if (b.hasAttribute('data-x')) close();
+    });
+  });
+}
+/* ---------------- note: MusicXML -> dogodki, predvajalnik ---------------- */
+async function unzipMxl(buf) {
+  const u = new Uint8Array(buf), dv = new DataView(buf); const files = {};
+  let p = 0;
+  while (p + 30 <= u.length && dv.getUint32(p, true) === 0x04034b50) {
+    const method = dv.getUint16(p + 8, true), flags = dv.getUint16(p + 6, true);
+    let csize = dv.getUint32(p + 18, true); const nlen = dv.getUint16(p + 26, true), xlen = dv.getUint16(p + 28, true);
+    const name = new TextDecoder().decode(u.subarray(p + 30, p + 30 + nlen)); const start = p + 30 + nlen + xlen;
+    if (flags & 8 && !csize) { // velikost je v deskriptorju za podatki: poišči ga v centralnem imeniku
+      const cd = findCentral(u, dv, name); csize = cd ? cd.csize : 0;
+    }
+    const data = u.subarray(start, start + csize);
+    files[name] = method === 0 ? data : new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+    p = start + csize; if (flags & 8) { if (dv.getUint32(p, true) === 0x08074b50) p += 16; else p += 12; }
+  }
+  const txt = n => new TextDecoder().decode(files[n]);
+  let main = null;
+  if (files['META-INF/container.xml']) { const m = txt('META-INF/container.xml').match(/full-path="([^"]+)"/); if (m) main = m[1]; }
+  if (!main) main = Object.keys(files).find(n => /\.(musicxml|xml)$/i.test(n) && !n.startsWith('META-INF'));
+  if (!main) throw new Error('V datoteki .mxl ni zapisa not');
+  return txt(main);
+}
+function findCentral(u, dv, name) {
+  for (let i = u.length - 22; i >= 0; i--) if (dv.getUint32(i, true) === 0x06054b50) {
+    let q = dv.getUint32(i + 16, true); const n = dv.getUint16(i + 10, true);
+    for (let k = 0; k < n; k++) {
+      const nl = dv.getUint16(q + 28, true), xl = dv.getUint16(q + 30, true), cl = dv.getUint16(q + 32, true);
+      const nm = new TextDecoder().decode(u.subarray(q + 46, q + 46 + nl));
+      if (nm === name) return { csize: dv.getUint32(q + 20, true) };
+      q += 46 + nl + xl + cl;
+    }
+    break;
+  }
+  return null;
+}
+const STEP = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+function parseMusicXml(text) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.querySelector('parsererror')) throw new Error('Datoteka ni veljaven MusicXML');
+  if (doc.documentElement.nodeName === 'score-timewise') throw new Error('Zapis »timewise« ni podprt; izvozi kot »partwise«');
+  const kid = (el, n) => { for (const c of el.children) if (c.nodeName === n) return c; return null; };
+  const num = (el, n, d = 0) => { const c = el && kid(el, n); return c ? +c.textContent : d; };
+  let bpm = 0, ts = [4, 4];
+  const parts = [...doc.querySelectorAll('score-partwise > part')];
+  const ev = []; let total = 0;
+  parts.forEach((part, pi) => {
+    const measures = [...part.children].filter(c => c.nodeName === 'measure');
+    // razširi ponovitve: |: … :| in volte 1./2.
+    const order = []; let repStart = 0; const passed = new Set(); let i = 0, guard = 0;
+    while (i < measures.length && guard++ < 4000) {
+      const bars = [...measures[i].children].filter(c => c.nodeName === 'barline');
+      const rep = d => bars.some(x => kid(x, 'repeat')?.getAttribute('direction') === d);
+      if (rep('forward') && !passed.has(i)) repStart = i;
+      const en = bars.map(x => kid(x, 'ending')).find(Boolean);
+      const pass = passed.has(repStart) ? '2' : '1';
+      if (en && !(en.getAttribute('number') || '1').split(/[ ,]+/).includes(pass)) { i++; continue; }
+      order.push(i);
+      if (rep('backward') && !passed.has(repStart)) { passed.add(repStart); i = repStart; continue; }
+      i++;
+    }
+    let divisions = 1, pos = 0; const ties = new Map();
+    for (const mi of order) {
+      const m = measures[mi]; let cur = pos, maxPos = pos, lastStart = pos;
+      for (const el of m.children) {
+        if (el.nodeName === 'attributes') {
+          const d = kid(el, 'divisions'); if (d) divisions = +d.textContent || 1;
+          const t = kid(el, 'time'); if (t && pi === 0) ts = [num(t, 'beats', 4), num(t, 'beat-type', 4)];
+        } else if (el.nodeName === 'direction' || el.nodeName === 'sound') {
+          const snd = el.nodeName === 'sound' ? el : el.querySelector('sound');
+          if (snd && snd.getAttribute('tempo') && !bpm) bpm = +snd.getAttribute('tempo');
+        } else if (el.nodeName === 'backup') { cur -= num(el, 'duration') / divisions; }
+        else if (el.nodeName === 'forward') { cur += num(el, 'duration') / divisions; maxPos = Math.max(maxPos, cur); }
+        else if (el.nodeName === 'note') {
+          if (kid(el, 'grace')) continue;
+          const dur = num(el, 'duration') / divisions;
+          const isChord = !!kid(el, 'chord');
+          const start = isChord ? lastStart : cur;
+          if (!isChord) lastStart = cur;
+          const pitch = kid(el, 'pitch');
+          const staff = num(el, 'staff', 1), voice = num(el, 'voice', 1);
+          if (pitch) {
+            const midi = 12 * (num(pitch, 'octave') + 1) + STEP[kid(pitch, 'step').textContent.trim()] + num(pitch, 'alter');
+            const tieT = [...el.querySelectorAll(':scope > tie')].map(t => t.getAttribute('type'));
+            const tk = pi + '|' + staff + '|' + midi;
+            if (tieT.includes('stop') && ties.has(tk)) { const e0 = ties.get(tk); e0[1] = start + dur - e0[0]; if (!tieT.includes('start')) ties.delete(tk); }
+            else { const e = [start, dur, midi, pi * 10 + staff * 3 + voice]; ev.push(e); if (tieT.includes('start')) ties.set(tk, e); }
+          }
+          if (!isChord) { cur += dur; maxPos = Math.max(maxPos, cur); }
+        }
+      }
+      pos = maxPos;
+    }
+    total = Math.max(total, pos);
+  });
+  if (!ev.length) throw new Error('V zapisu ni not');
+  // glasove razvrsti po povprečni višini: S, A, T, B
+  const groups = {}; for (const e of ev) (groups[e[3]] = groups[e[3]] || []).push(e[2]);
+  const keys = Object.keys(groups).sort((a, b) => avg(groups[b]) - avg(groups[a]));
+  const label = {}; keys.forEach((k, i) => { label[k] = Math.min(i, 3); });
+  const out = ev.map(e => [+e[0].toFixed(4), +e[1].toFixed(4), e[2], label[e[3]]]).sort((a, b) => a[0] - b[0] || b[2] - a[2]);
+  return { v: 1, bpm: bpm || 0, ts, len: +total.toFixed(4), voices: Math.min(keys.length, 4), ev: out };
+}
+function avg(a) { return a.reduce((x, y) => x + y, 0) / a.length; }
+
+const VOICE_NAMES = ['S', 'A', 'T', 'B'];
+const PL = { ctx: null, wave: null, master: null, playing: false, song: null, data: null, pos: 0, t0: 0, p0: 0, idx: 0, timer: 0, raf: 0, nodes: new Set() };
+const notesFor = s => s && S.notes[s.num || s.key] || null;
+function audio() {
+  if (!PL.ctx) {
+    PL.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // orgelski zvok: osnovni ton + oktava + kvinta (8' + 4' + 2 2/3')
+    const real = new Float32Array([0, 1, 0.55, 0.28, 0.22, 0.08, 0.06, 0, 0.04]); const imag = new Float32Array(real.length);
+    PL.wave = PL.ctx.createPeriodicWave(real, imag);
+    const comp = PL.ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 3;
+    PL.master = PL.ctx.createGain(); PL.master.gain.value = 0.55; PL.master.connect(comp); comp.connect(PL.ctx.destination);
+  }
+  if (PL.ctx.state === 'suspended') PL.ctx.resume();
+  return PL.ctx;
+}
+const plBpm = () => (S.settings.tempo || {})[PL.song?.key] || PL.data?.bpm || 72;
+const plTr = () => S.settings.transpose || 0;
+const voiceOn = v => !(S.settings.mute || []).includes(v);
+const beatSec = () => 60 / plBpm();
+function curPos() { return PL.playing ? PL.p0 + (PL.ctx.currentTime - PL.t0) / beatSec() : PL.pos; }
+function playNote(midi, when, dur, v) {
+  const ctx = PL.ctx; const f = 440 * Math.pow(2, (midi + plTr() - 69) / 12);
+  const o = ctx.createOscillator(); o.setPeriodicWave(PL.wave); o.frequency.value = f;
+  const g = ctx.createGain(); const solo = S.settings.solo;
+  const vol = (solo != null ? (v === solo ? 0.34 : 0.1) : (v === 0 ? 0.26 : 0.19)) / Math.max(1, (PL.data.voices || 4) / 3);
+  const end = when + Math.max(0.06, dur - 0.025);
+  g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(vol, when + 0.025);
+  g.gain.setValueAtTime(vol, end); g.gain.linearRampToValueAtTime(0, end + 0.07);
+  const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+  if (pan) { pan.pan.value = [-0.25, -0.08, 0.08, 0.25][v] || 0; o.connect(g); g.connect(pan); pan.connect(PL.master); } else { o.connect(g); g.connect(PL.master); }
+  o.start(when); o.stop(end + 0.1); PL.nodes.add(o); o.onended = () => PL.nodes.delete(o);
+}
+function schedule() {
+  const ctx = PL.ctx, ahead = ctx.currentTime + 0.35, ev = PL.data.ev, bs = beatSec();
+  while (PL.idx < ev.length) {
+    const e = ev[PL.idx]; const when = PL.t0 + (e[0] - PL.p0) * bs;
+    if (when > ahead) break;
+    if (e[0] >= PL.p0 - 1e-6 && voiceOn(e[3])) playNote(e[2], Math.max(when, ctx.currentTime), e[1] * bs, e[3]);
+    PL.idx++;
+  }
+  if (PL.idx >= PL.data.ev.length && curPos() >= PL.data.len) {
+    if (S.settings.loop) { plSeek(0, true); return; }
+    plStop(); return;
+  }
+}
+function plStart(from) {
+  audio(); PL.p0 = from; PL.t0 = PL.ctx.currentTime + 0.06; PL.playing = true;
+  PL.idx = PL.data.ev.findIndex(e => e[0] >= from - 1e-6); if (PL.idx < 0) PL.idx = PL.data.ev.length;
+  clearInterval(PL.timer); PL.timer = setInterval(schedule, 40); schedule();
+  cancelAnimationFrame(PL.raf); const tick = () => { plUi(); if (PL.playing) PL.raf = requestAnimationFrame(tick); }; tick();
+  wakeOn();
+}
+function silence() { for (const o of PL.nodes) { try { o.stop(); } catch {} } PL.nodes.clear(); }
+function plPause() { if (!PL.playing) return; PL.pos = curPos(); PL.playing = false; clearInterval(PL.timer); silence(); plUi(); }
+function plStop() { PL.playing = false; clearInterval(PL.timer); silence(); PL.pos = 0; plUi(); }
+function plSeek(p, keep) { const was = PL.playing || keep; if (PL.playing) { clearInterval(PL.timer); silence(); PL.playing = false; } PL.pos = Math.max(0, Math.min(p, PL.data.len)); if (was) plStart(PL.pos); else plUi(); }
+function plRestartIfPlaying() { if (PL.playing) plSeek(curPos(), true); else plUi(); }
+const fmtT = sec => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+function plUi() {
+  const bar = $('#playerbar'); if (!bar || bar.hidden) return;
+  const d = PL.data, s = PL.song;
+  $('#pl-title').innerHTML = s ? `${s.num ? `<b>${numLabel(s.num)}</b> ` : ''}${esc(s.title)}` : '';
+  bar.classList.toggle('nodata', !d);
+  if (!d) return;
+  const p = curPos(), bs = beatSec();
+  $('#pl-play').innerHTML = PL.playing ? ICON_PAUSE : ICON_PLAY; $('#pl-play').setAttribute('aria-label', PL.playing ? 'Ustavi' : 'Zaigraj');
+  const sl = $('#pl-seek'); sl.max = d.len; if (document.activeElement !== sl) sl.value = Math.min(p, d.len);
+  $('#pl-time').textContent = `${fmtT(p * bs)} / ${fmtT(d.len * bs)}`;
+  $('#pl-bpm').textContent = Math.round(plBpm());
+  const tr = plTr(); $('#pl-tr').textContent = tr ? (tr > 0 ? '+' + tr : String(tr)) : '0';
+  document.querySelectorAll('#playerbar [data-voice]').forEach(b => { const v = +b.dataset.voice; b.hidden = v >= (d.voices || 4); b.setAttribute('aria-pressed', voiceOn(v)); b.classList.toggle('solo', S.settings.solo === v); });
+  $('#pl-loop').setAttribute('aria-pressed', !!S.settings.loop);
+  $('#pl-src').textContent = d.src === 'omr' ? 'Prebrano samodejno – lahko vsebuje napake' : d.src === 'file' ? 'Iz tvoje datoteke MusicXML' : '';
+}
+function openPlayer(s) {
+  if (PL.song && s && PL.song.key !== s.key) plStop();
+  PL.song = s; PL.data = notesFor(s); if (PL.data) PL.pos = Math.min(PL.pos, PL.data.len);
+  $('#playerbar').hidden = false; reader.classList.add('playing'); $('#r-play').setAttribute('aria-pressed', 'true'); plUi(); showChrome();
+}
+function closePlayer() { plStop(); $('#playerbar').hidden = true; reader.classList.remove('playing'); $('#r-play').setAttribute('aria-pressed', 'false'); }
+async function importSongXml(file, s) {
+  try {
+    const buf = await file.arrayBuffer();
+    const text = /\.mxl$/i.test(file.name) || new Uint8Array(buf)[0] === 0x50 ? await unzipMxl(buf) : new TextDecoder().decode(buf);
+    const data = parseMusicXml(text); data.src = 'file';
+    S.notes[s.num || s.key] = data; await saveNotes();
+    toast(`Note naložene: ${data.ev.length} not, ${data.voices} ${data.voices === 1 ? 'glas' : data.voices === 2 ? 'glasova' : 'glasovi'}`);
+    if (PL.song && PL.song.key === s.key) { PL.data = data; PL.pos = 0; plUi(); }
+  } catch (e) { toast(e.message || 'Datoteke ni bilo mogoče prebrati'); }
+}
+async function importNotesPack(file) {
+  try {
+    const pack = JSON.parse(await file.text());
+    if (!pack || !pack.songs) throw 0;
+    let n = 0; for (const [k, v] of Object.entries(pack.songs)) { if (v && v.ev && v.ev.length) { S.notes[k] = v; n++; } }
+    await saveNotes(); render(); toast(`Uvoženih not za ${n} pesmi`);
+  } catch { toast('To ni paket not za pesmarico'); }
+}
+async function saveNotes() { try { await DB.put('meta', 'notes', S.notes); } catch { storageFailed(); } }
+
+function listHtml(arr) {
+  if (!arr.length) return '';
+  const shown = arr.slice(0, S.limit);
+  return `<ul class="list">${shown.map(rowHtml).join('')}</ul>` +
+    (arr.length > shown.length ? `<button class="btn more" data-more>Pokaži še ${arr.length - shown.length}</button>` : '');
+}
+function missingNotice() {
+  const miss = Object.keys(BOOKS).filter(b => !bookDoc(b));
+  if (!miss.length) return '';
+  const all = miss.length === Object.keys(BOOKS).length;
+  return `<div class="notice"><p>${all
+    ? 'Kazalo je pripravljeno. Dodaj še oba PDF-ja, <b>Slavimo Gospoda I</b> in <b>II</b>, da se pesmi odprejo. Ostaneta samo na tej napravi.'
+    : `Manjka še knjiga <b>${miss.join(' in ')}</b>. Njene pesmi se odprejo, ko dodaš PDF.`}</p>
+    <button class="btn primary" data-add>${ICON_PLUS}Dodaj PDF</button></div>`;
+}
+function render() {
+  document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.tab === S.tab));
+  $('#cnt-all').textContent = S.songs.length;
+  $('#cnt-fav').textContent = S.favs.size || '';
+  $('#qclear').hidden = !S.q;
+  const loaded = Object.keys(BOOKS).filter(b => bookDoc(b)).length;
+  $('#tally').innerHTML = `<b>${CATALOG.length}</b> pesmi<br><b>${loaded}</b>/${Object.keys(BOOKS).length} knjig naloženih`;
+  let h = '';
+  if (!S.storageOK) h += `<div class="notice"><p>Ta brskalnik ne dovoli shranjevanja, zato bo treba PDF-ja po vsakem zagonu dodati znova. Odpri aplikacijo v navadnem zavihku ali jo namesti na začetni zaslon.</p></div>`;
+  if (S.tab === 'all') {
+    h += missingNotice();
+    if (S.q) {
+      const res = search(S.q);
+      h += `<div class="section-head"><h2>${res.length ? `Zadetki<em>${res.length}</em>` : 'Ni zadetkov'}</h2></div>`;
+      h += res.length ? listHtml(res) : `<div class="empty"><strong>Nobena pesem ne ustreza »${esc(S.q)}«</strong>Poskusi s številko pesmi ali eno besedo iz naslova.</div>`;
+    } else {
+      const rec = S.recent.map(k => S.songs.find(s => s.key === k)).filter(Boolean).slice(0, 10);
+      if (rec.length) h += `<div class="section-head"><h2>Nazadnje odprto</h2></div><div class="recent">${rec.map(s => `<button data-open="${esc(s.key)}"><span class="n">${numLabel(s.num) || '·'}</span><span class="t">${esc(s.title)}</span></button>`).join('')}</div>`;
+      h += popularHtml();
+      h += `<div class="section-head"><h2>Kazalo</h2><div class="chips"><button class="chip" data-sort="sec" aria-pressed="${S.sort === 'sec'}">Po sklopih</button><button class="chip" data-sort="num" aria-pressed="${S.sort === 'num'}">Po številki</button><button class="chip" data-sort="abc" aria-pressed="${S.sort === 'abc'}">Po abecedi</button></div></div>`;
+      h += S.sort === 'sec' ? sectionsHtml() : listHtml([...S.songs].sort(cmpSong));
+    }
+  } else if (S.tab === 'fav') {
+    let fav = S.songs.filter(s => S.favs.has(s.key));
+    if (S.q) { const r = new Set(search(S.q)); fav = fav.filter(s => r.has(s)); }
+    fav.sort(cmpSong);
+    h += `<div class="section-head"><h2>Priljubljene${fav.length ? `<em>${fav.length}</em>` : ''}</h2></div>`;
+    h += fav.length ? listHtml(fav) : `<div class="empty"><strong>${S.q ? 'Med priljubljenimi ni zadetkov' : 'Še ni priljubljenih pesmi'}</strong>Tapni zvezdico ob pesmi na seznamu ali med branjem, pa se pesem pojavi tukaj.</div>`;
+  } else if (S.tab === 'mass') h += massHtml();
+  else h += booksHtml();
+  content.innerHTML = h;
+}
+function booksHtml() {
+  let h = `<div class="section-head"><h2>Knjige</h2><button class="btn primary" data-add>${ICON_PLUS}Dodaj PDF</button></div><div class="books">`;
+  for (const b of Object.keys(BOOKS)) {
+    const d = bookDoc(b);
+    const items = CATALOG.filter(c => c[3] === b);
+    const first = items[0], last = items[items.length - 1];
+    h += `<div class="book"><span class="roman" aria-hidden="true">${b}</span><h3>Slavimo Gospoda ${b}</h3>
+      <div class="meta">${items.length} pesmi${first ? ` · št. ${first[0].split('-')[0]}–${last[0].split('-').pop()}` : ''} · ${BOOKS[b].pages} strani</div>
+      ${d ? (d.status === 'busy' ? `<span class="status busy">Nalagam …</span>` : `<span class="status ok">Naložena</span><div class="meta">${esc(d.name)} · ${(d.size / 1048576).toFixed(1)} MB</div>`) : `<span class="status no">Ni naložena</span>`}
+      <div class="actions">${d ? `<button class="btn" data-openbook="${d.id}">Odpri</button><button class="btn danger" data-del="${d.id}">Odstrani</button>` : `<button class="btn primary" data-add>Dodaj PDF ${b}</button>`}</div></div>`;
+  }
+  for (const d of S.docs.filter(d => !d.book)) {
+    h += `<div class="book"><h3>${esc(d.name)}</h3><div class="meta">${d.pages || '?'} strani · ${d.songs.length} naslovov</div>
+      ${d.status === 'busy' ? `<span class="status busy" data-progress="${d.id}">Iščem naslove …</span>` : `<span class="status ok">Naložena</span>`}
+      <div class="actions"><button class="btn" data-openbook="${d.id}">Odpri</button><button class="btn danger" data-del="${d.id}">Odstrani</button></div></div>`;
+  }
+  h += `</div><div class="section-head"><h2>Branje</h2></div>
+    <div class="setrow"><label for="set-fs">Ob odprtju pesmi preklopi na cel zaslon<small>Skrije vrstico brskalnika in sistemske gumbe.</small></label><input type="checkbox" id="set-fs" data-set="autoFs" ${S.settings.autoFs ? 'checked' : ''}></div>
+    <div class="setrow"><label for="set-spread">Dve strani hkrati, ko je tablica ležeča<small>Obrača se po dve strani naenkrat.</small></label><input type="checkbox" id="set-spread" data-set="spread" ${S.settings.spread ? 'checked' : ''}></div>
+    <div class="setrow"><label for="set-awake">Zaslon naj med branjem ne ugasne</label><input type="checkbox" id="set-awake" data-set="keepAwake" ${S.settings.keepAwake ? 'checked' : ''}></div>
+    <div class="section-head"><h2>Note za predvajanje<em>${Object.keys(S.notes).length} pesmi</em></h2></div>
+    <div class="setrow"><label>Zapis not za igranje<small>Med branjem tapni zgoraj gumb z notami. Note posamezne pesmi naložiš tam (datoteka MusicXML, npr. iz MuseScora ali Audiverisa), paket za več pesmi (.json) pa z »Dodaj PDF«. Note ostanejo samo v tej napravi.</small></label>${Object.keys(S.notes).length ? '<button class="btn danger" data-clearnotes>Izbriši vse note</button>' : ''}</div>
+    <div class="help">
+      <h3>Obračanje strani</h3>
+      Tapni desno tretjino strani za naprej, levo za nazaj in sredino za meni. Lahko tudi povlečeš stran s prstom. Bluetooth pedal deluje s tipkami <kbd>→</kbd> <kbd>←</kbd>, <kbd>PgDn</kbd> <kbd>PgUp</kbd> ali <kbd>preslednica</kbd>.
+      <h3>Pisanje po notah</h3>
+      S pisalom (S Pen, Apple Pencil) lahko pišeš kar takoj, prst pa še vedno obrača strani. Za pisanje s prstom tapni svinčnik zgoraj. Zapiski se shranijo posebej za vsako stran; PDF ostane nespremenjen.
+      <h3>Pesem manjka v kazalu</h3>
+      Med branjem tapni gumb s črtami in vpiši naslov strani. Pesem se doda v iskalnik.
+      <h3>Shranjevanje</h3>
+      PDF-ja, zapiski in priljubljene ostanejo samo v tej napravi. Če počistiš podatke brskalnika, jih bo treba dodati znova.
+    </div>`;
+  return h;
+}
+
+/* ---------------- home events ---------------- */
+const qEl = $('#q');
+let qTimer = 0;
+qEl.addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => { S.q = qEl.value.trim(); S.limit = 200; if (S.tab === 'books') S.tab = 'all'; render(); $('#scroll').scrollTop = 0; }, 80); });
+qEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { const s = (S.q ? search(S.q) : []).find(x => songDoc(x)); if (s) { qEl.blur(); openSong(s); } }
+  if (e.key === 'Escape') { qEl.value = ''; S.q = ''; render(); }
+});
+$('#qclear').addEventListener('click', () => { qEl.value = ''; S.q = ''; render(); qEl.focus(); });
+document.querySelector('.tabs').addEventListener('click', e => {
+  const t = e.target.closest('.tab'); if (!t) return;
+  S.tab = t.dataset.tab; S.limit = 200; render(); $('#scroll').scrollTop = 0;
+});
+const armed = new WeakMap();
+content.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.fav) { toggleFav(b.dataset.fav); return; }
+  if (b.dataset.open) { const s = S.songs.find(x => x.key === b.dataset.open); if (s) openSong(s); return; }
+  if (b.hasAttribute('data-add')) { $('#file').click(); return; }
+  if (b.hasAttribute('data-more')) { S.limit += 400; render(); return; }
+  if (b.dataset.sort) { S.sort = b.dataset.sort; saveMeta(); render(); return; }
+  if (b.hasAttribute('data-newplan')) { newPlan(); return; }
+  if (b.hasAttribute('data-clearnotes')) {
+    if (!armed.get(b)) { armed.set(b, 1); b.classList.add('armed'); b.textContent = 'Res izbriši?'; setTimeout(() => { if (b.isConnected) { armed.delete(b); b.classList.remove('armed'); b.textContent = 'Izbriši vse note'; } }, 3500); return; }
+    S.notes = {}; saveNotes(); render(); return;
+  }
+  if (b.dataset.editplan) { S.planId = b.dataset.editplan; render(); $('#scroll').scrollTop = 0; return; }
+  if (b.hasAttribute('data-planback')) { S.planId = null; render(); return; }
+  if (b.dataset.playplan) { const pl = S.plans.find(p => p.id === b.dataset.playplan); if (pl) playPlan(pl, 0); return; }
+  if (b.dataset.playat) { const pl = curPlan(); if (pl) playPlan(pl, +b.dataset.playat); return; }
+  if (b.dataset.pickslot) { const pl = curPlan(); if (pl) openPicker(pl, b.dataset.pickslot); return; }
+  if (b.dataset.unpick) { const pl = curPlan(); const [sid, k] = b.dataset.unpick.split('|'); if (pl) { pl.slots[sid] = (pl.slots[sid] || []).filter(x => x !== k); saveMeta(); render(); } return; }
+  if (b.hasAttribute('data-autofill')) { const pl = curPlan(); if (pl) autofill(pl); return; }
+  if (b.hasAttribute('data-planpdf')) { const pl = curPlan(); if (pl) exportSongs(planSeq(pl).map(x => songByKey(x.key)), safeName(pl.name || 'Maša') + '.pdf'); return; }
+  if (b.dataset.delplan) {
+    if (!armed.get(b)) { armed.set(b, 1); b.classList.add('armed'); b.textContent = 'Res izbriši?'; setTimeout(() => { if (b.isConnected) { armed.delete(b); b.classList.remove('armed'); b.textContent = 'Izbriši'; } }, 3500); return; }
+    S.plans = S.plans.filter(p => p.id !== b.dataset.delplan); S.planId = null; saveMeta(); render(); return;
+  }
+  if (b.dataset.openbook) { openReader(b.dataset.openbook, 1); return; }
+  if (b.dataset.del) {
+    if (!armed.get(b)) { armed.set(b, 1); b.classList.add('armed'); b.textContent = 'Res odstrani?'; setTimeout(() => { if (b.isConnected) { armed.delete(b); b.classList.remove('armed'); b.textContent = 'Odstrani'; } }, 3500); return; }
+    const d = S.docs.find(x => x.id === b.dataset.del); if (d) removeDoc(d);
+  }
+});
+content.addEventListener('toggle', e => {
+  const d = e.target; if (!d.matches || !d.matches('details.sec')) return;
+  const k = d.dataset.sec;
+  if (d.open) {
+    S.openSecs.add(k);
+    if (!d.querySelector('.list')) {
+      const i = k === 'x' ? -1 : +k;
+      const items = S.songs.filter(s => secOf(s) === i).sort((a, b) => a.nv - b.nv || coll.compare(a.title, b.title));
+      d.insertAdjacentHTML('beforeend', `<ul class="list">${items.map(rowHtml).join('')}</ul>`);
+    }
+  } else S.openSecs.delete(k);
+}, true);
+content.addEventListener('input', e => {
+  const pl = curPlan(); if (!pl) return;
+  if (e.target.matches('[data-plname]')) { pl.name = e.target.value; saveMeta(); }
+});
+content.addEventListener('change', e => {
+  if (e.target.matches('[data-pldate]')) { const pl = curPlan(); if (pl) { pl.date = e.target.value; saveMeta(); render(); } return; } const k = e.target.dataset.set; if (!k) return; S.settings[k] = e.target.checked; saveMeta(); });
+$('#file').addEventListener('change', e => { const f = e.target.files; if (f && f.length) addFiles(f); e.target.value = ''; });
+let dropEl = null;
+addEventListener('dragover', e => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); if (!dropEl) { dropEl = document.createElement('div'); dropEl.className = 'drop'; dropEl.textContent = 'Spusti PDF pesmarice'; document.body.append(dropEl); } } });
+addEventListener('dragleave', e => { if (e.relatedTarget == null && dropEl) { dropEl.remove(); dropEl = null; } });
+addEventListener('drop', e => { e.preventDefault(); if (dropEl) { dropEl.remove(); dropEl = null; } if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files); });
+
+function toggleFav(key) {
+  if (S.favs.has(key)) S.favs.delete(key); else S.favs.add(key);
+  saveMeta();
+  const sc = $('#scroll').scrollTop; render(); $('#scroll').scrollTop = sc;
+  if (R.open) updateChrome();
+}
+
+/* ---------------- toast & modal ---------------- */
+let toastEl = null, toastT = 0;
+function toast(msg) {
+  if (!toastEl) { toastEl = document.createElement('div'); toastEl.className = 'toast'; toastEl.setAttribute('role', 'status'); document.body.append(toastEl); }
+  toastEl.textContent = msg; toastEl.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => { toastEl.hidden = true; }, 2800);
+}
+function modal(html, onMount) {
+  const root = $('#modal-root');
+  root.innerHTML = `<div class="modal"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+  const m = root.firstElementChild;
+  const close = () => { root.innerHTML = ''; };
+  m.addEventListener('click', e => { if (e.target === m) close(); });
+  onMount(m, close);
+}
+
+/* ================= reader ================= */
+const reader = $('#reader'), stage = $('#stage'), strip = $('#strip');
+let [slotPrev, slotCur, slotNext] = [...strip.children];
+const R = { doc: null, pdf: null, page: 1, open: false, pushed: false, views: new Map(), quietT: 0, wake: null, anim: 0, animT: 0, focus: null, pen: false, ink: new Map(), undo: [] };
+
+function placeSlots() { slotPrev.style.left = '-100%'; slotCur.style.left = '0'; slotNext.style.left = '100%'; }
+placeSlots();
+
+function openSong(s) {
+  const d = songDoc(s);
+  if (!d) { toast(s.book ? `Za to pesem dodaj PDF knjige ${s.book}` : 'PDF te pesmi ni več naložen'); S.tab = 'books'; render(); return; }
+  S.recent = [s.key, ...S.recent.filter(k => k !== s.key)].slice(0, 12); S.counts[s.key] = (S.counts[s.key] || 0) + 1; saveMeta();
+  R.focus = s;
+  openReader(d.id, s.page);
+}
+async function openReader(docId, page) {
+  const doc = S.docs.find(d => d.id === docId); if (!doc) return;
+  if (S.settings.autoFs) enterFs();
+  if (R.doc !== doc) { R.focus = R.focus && songDoc(R.focus) === doc ? R.focus : null; }
+  R.doc = doc; R.page = page; R.open = true; R.views.clear(); R.undo = [];
+  [slotPrev, slotCur, slotNext].forEach(s => { s.replaceChildren(); delete s.dataset.start; });
+  resetReaderPos(); reader.hidden = false; $('#spin').hidden = false;
+  if (location.hash !== '#beri') { R.pushed = true; location.hash = 'beri'; }
+  if (S.settings.hint) { S.settings.hint = false; saveMeta(); showHint(); }
+  updateChrome(); showChrome();
+  try { R.pdf = await getPdf(docId); }
+  catch { toast('PDF ni več shranjen v napravi. Dodaj ga znova.'); closeReader(); S.tab = 'books'; render(); return; }
+  if (!R.open || R.doc !== doc) return;
+  $('#r-slider').max = R.pdf.numPages;
+  if (S.settings.keepAwake) wakeOn();
+  show(page, true);
+}
+function resetReaderPos() { reader.style.transition = 'none'; reader.style.transform = ''; reader.style.opacity = ''; }
+function hideReader() {
+  R.open = false; S.play = null; reader.classList.remove('inplan'); closePlayer(); reader.hidden = true; R.views.clear(); setPen(false);
+  [slotPrev, slotCur, slotNext].forEach(s => s.replaceChildren());
+  wakeOff();
+  if (document.fullscreenElement || document.webkitFullscreenElement) { try { (document.exitFullscreen || document.webkitExitFullscreen).call(document)?.catch?.(() => {}); } catch {} }
+  render();
+}
+function closeReader() {
+  if (R.pushed && location.hash === '#beri') { R.pushed = false; history.back(); setTimeout(() => { if (R.open) hideReader(); }, 350); }
+  else hideReader();
+}
+addEventListener('hashchange', () => { if (location.hash !== '#beri' && R.open) { R.pushed = false; hideReader(); } });
+
+const N = () => R.pdf ? R.pdf.numPages : 1;
+const spreadOn = () => S.settings.spread && R.pdf && N() > 1 && stage.clientWidth > stage.clientHeight * 1.15;
+const step = () => spreadOn() ? 2 : 1;
+const pagesAt = n => (n < 1 || n > N()) ? [] : (spreadOn() && n < N() ? [n, n + 1] : [n]);
+const visible = () => pagesAt(R.page);
+
+function boxFor(count) { return { w: Math.floor((stage.clientWidth - (count - 1) * 3) / count), h: stage.clientHeight }; }
+function viewFor(p, box) {
+  const key = `${p}|${box.w}x${box.h}`;
+  if (R.views.has(key)) { const v = R.views.get(key); R.views.delete(key); R.views.set(key, v); return v; }
+  const pr = buildView(R.pdf, R.doc, p, box);
+  R.views.set(key, pr); pr.catch(() => R.views.delete(key));
+  while (R.views.size > 6) R.views.delete(R.views.keys().next().value);
+  return pr;
+}
+async function buildView(pdf, doc, p, box) {
+  const page = await pdf.getPage(p);
+  const v1 = page.getViewport({ scale: 1 });
+  const fit = Math.min(box.w / v1.width, box.h / v1.height);
+  const dpr = Math.min(devicePixelRatio || 1, 2.5);
+  let scale = fit * dpr;
+  const maxPx = 6e6;
+  if (v1.width * v1.height * scale * scale > maxPx) scale = Math.sqrt(maxPx / (v1.width * v1.height));
+  const vp = page.getViewport({ scale });
+  const cssW = Math.floor(v1.width * fit), cssH = Math.floor(v1.height * fit);
+  const c = document.createElement('canvas');
+  c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+  const ctx = c.getContext('2d', { alpha: false });
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  await page.render({ canvasContext: ctx, viewport: vp }).promise;
+  const el = document.createElement('div'); el.className = 'pv'; el.style.width = cssW + 'px'; el.style.height = cssH + 'px';
+  el.append(c);
+  const view = { el, ink: null, p, key: doc.id + ':' + p, cssW, cssH, dpr };
+  el._view = view;
+  const strokes = await loadInk(view.key);
+  if (strokes.length) drawInk(view);
+  return view;
+}
+function inkCanvas(view) {
+  if (!view.ink) {
+    const ink = document.createElement('canvas'); ink.className = 'ink';
+    ink.width = Math.round(view.cssW * view.dpr); ink.height = Math.round(view.cssH * view.dpr);
+    view.el.append(ink); view.ink = ink;
+  }
+  return view.ink;
+}
+async function fillSlot(slot, start, tok) {
+  slot.dataset.start = start;
+  const nums = pagesAt(start);
+  if (!nums.length) { slot.replaceChildren(); return; }
+  const box = boxFor(nums.length);
+  const views = await Promise.all(nums.map(p => viewFor(p, box)));
+  if (slot.dataset.start != start || tok !== R.tok) return;
+  slot.replaceChildren(...views.map(v => v.el));
+  if (slot === slotCur) { $('#spin').hidden = true; markFocus(); }
+}
+function show(n, mark) {
+  if (!R.pdf) return;
+  R.page = clamp(n, 1, N());
+  if (spreadOn() && R.page === N() && N() > 1 && step() === 2) R.page = Math.max(1, N() - 1);
+  const tok = R.tok = (R.tok || 0) + 1;
+  if (!mark) R.focus = R.focus && visible().includes(R.focus.page) ? R.focus : null;
+  updateChrome();
+  slotCur.replaceChildren(); slotPrev.replaceChildren(); slotNext.replaceChildren();
+  const spinT = setTimeout(() => { if (tok === R.tok && !slotCur.firstChild) $('#spin').hidden = false; }, 120);
+  fillSlot(slotCur, R.page, tok).catch(() => toast('Strani ni bilo mogoče prikazati')).finally(() => clearTimeout(spinT));
+  setTimeout(() => { if (tok !== R.tok) return; fillSlot(slotNext, R.page + step(), tok).catch(() => {}); fillSlot(slotPrev, R.page - step(), tok).catch(() => {}); }, 40);
+}
+function markFocus() {
+  const s = R.focus; if (!s || !s.y || s.y < 0.02) return;
+  const v = [...slotCur.children].find(el => el._view && el._view.p === s.page); if (!v || v.querySelector('.mark')) return;
+  const m = document.createElement('div'); m.className = 'mark'; m.style.top = (s.y * 100) + '%';
+  v.append(m); setTimeout(() => m.remove(), 4800);
+}
+
+/* --- smooth turning --- */
+const DUR = 280;
+function turn(dir, fromDx = 0) {
+  if (!R.pdf) return;
+  if (R.anim) finishTurn();
+  const target = R.page + dir * step();
+  if (target < 1 || target > N()) { settle(); bump(dir); return; }
+  if (reduced) { strip.style.transform = ''; rotate(dir); return; }
+  R.anim = dir;
+  const W = stage.clientWidth;
+  const remain = 1 - Math.min(1, Math.abs(fromDx) / W);
+  strip.style.transition = `transform ${Math.max(140, DUR * remain)}ms var(--ease)`;
+  strip.style.transform = `translate3d(${-dir * W}px,0,0)`;
+  R.animT = setTimeout(finishTurn, Math.max(140, DUR * remain) + 20);
+}
+function finishTurn() {
+  clearTimeout(R.animT);
+  const dir = R.anim; R.anim = 0;
+  strip.style.transition = 'none'; strip.style.transform = 'translate3d(0,0,0)';
+  if (dir) rotate(dir);
+}
+function rotate(dir) {
+  R.page += dir * step();
+  if (dir > 0) { const o = slotPrev; slotPrev = slotCur; slotCur = slotNext; slotNext = o; }
+  else { const o = slotNext; slotNext = slotCur; slotCur = slotPrev; slotPrev = o; }
+  placeSlots();
+  R.focus = R.focus && visible().includes(R.focus.page) ? R.focus : null;
+  updateChrome();
+  const tok = R.tok;
+  if (slotCur.dataset.start != R.page || !slotCur.firstChild) { $('#spin').hidden = false; fillSlot(slotCur, R.page, tok).catch(() => {}); }
+  else $('#spin').hidden = true;
+  const fresh = dir > 0 ? slotNext : slotPrev;
+  fresh.replaceChildren();
+  fillSlot(fresh, R.page + dir * step(), tok).catch(() => {});
+}
+function snapReaderBack() { reader.style.transition = 'transform 200ms ease, opacity 200ms ease'; reader.style.transform = ''; reader.style.opacity = ''; }
+function settle() { strip.style.transition = `transform 220ms var(--ease)`; strip.style.transform = 'translate3d(0,0,0)'; }
+function bump(dir) {
+  if (reduced) return;
+  strip.animate?.([{ transform: 'translate3d(0,0,0)' }, { transform: `translate3d(${-dir * 18}px,0,0)` }, { transform: 'translate3d(0,0,0)' }], { duration: 240, easing: 'ease-out' });
+}
+const next = () => turn(1), prev = () => turn(-1);
+
+/* --- current song --- */
+function songsOf(doc) { return S.songs.filter(s => songDoc(s) === doc).sort((a, b) => a.page - b.page || a.y - b.y || a.nv - b.nv); }
+function currentSong() {
+  if (!R.doc) return null;
+  const vis = visible();
+  if (R.focus && vis.includes(R.focus.page) && songDoc(R.focus) === R.doc) return R.focus;
+  const last = vis[vis.length - 1] || R.page; let cur = null;
+  for (const s of songsOf(R.doc)) { if (s.page <= last) cur = s; else break; }
+  return cur;
+}
+function updateChrome() {
+  if (!R.doc) return;
+  const nums = R.pdf ? visible() : [R.page];
+  const s = currentSong();
+  const vs = R.pdf ? visibleSongs() : [];
+  const one = x => `${x.num ? `<span class="rn">${numLabel(x.num)}</span>` : ''}${esc(x.title)}`;
+  $('#r-title').innerHTML = vs.length > 1 && !S.play ? vs.map(one).join('<span style="opacity:.45;margin:0 10px">·</span>') : s ? one(s) : esc(R.doc.book ? 'Slavimo Gospoda ' + R.doc.book : R.doc.name);
+  $('#r-sub').textContent = [s && s.src === 'cat' ? s.comp : '', R.doc.book ? 'Slavimo Gospoda ' + R.doc.book : R.doc.name].filter(Boolean).join(' · ');
+  const fav = vs.length > 1 ? vs.some(x => S.favs.has(x.key)) : !!(s && S.favs.has(s.key));
+  const fb = $('#r-fav'); fb.innerHTML = ICON_STAR(fav); fb.setAttribute('aria-pressed', fav); fb.disabled = !s && !vs.length;
+  $('#r-pdf').disabled = !s && !vs.length;
+  $('#r-pg').innerHTML = `${nums.length > 1 ? nums[0] + '–' + nums[1] : nums[0]} <small>/ ${R.pdf ? N() : (R.doc.pages || '')}</small>`;
+  $('#r-slider').value = R.page;
+  $('#r-spread').setAttribute('aria-pressed', S.settings.spread);
+  updatePlanBar();
+}
+function showChrome() {
+  reader.classList.remove('quiet');
+  clearTimeout(R.quietT); R.quietT = setTimeout(() => { if (!$('#modal-root').firstChild) reader.classList.add('quiet'); }, 3200);
+}
+function toggleChrome() { if (reader.classList.contains('quiet')) showChrome(); else { clearTimeout(R.quietT); reader.classList.add('quiet'); } }
+function showHint() {
+  const h = document.createElement('div'); h.className = 'hint';
+  h.innerHTML = '<div>‹ Nazaj</div><div>Meni<br><small>↓ potegni dol = zapri</small></div><div>Naprej ›</div>';
+  reader.append(h); setTimeout(() => h.remove(), 3200);
+}
+
+/* --- gestures: finger swipes/taps, stylus writes --- */
+let g = null;       // finger gesture
+let stroke = null;  // active pen stroke
+let penSeen = false;
+stage.addEventListener('pointerdown', e => {
+  if (!R.pdf) return;
+  const writing = e.pointerType === 'pen' || R.pen;
+  if (writing) { startStroke(e); return; }
+  if (!e.isPrimary || g) return;
+  if (R.anim) finishTurn();
+  g = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), dx: 0, drag: false };
+  try { stage.setPointerCapture(e.pointerId); } catch {}
+});
+stage.addEventListener('pointermove', e => {
+  if (stroke && e.pointerId === stroke.id) { moveStroke(e); return; }
+  if (!g || e.pointerId !== g.id) return;
+  const dx = e.clientX - g.x, dy = e.clientY - g.y;
+  if (!g.drag && !g.vd && dy > 14 && dy > Math.abs(dx) * 1.2) g.vd = true;
+  if (g.vd) {
+    const y = Math.max(0, dy);
+    reader.style.transition = 'none';
+    reader.style.transform = `translate3d(0,${y}px,0)`;
+    reader.style.opacity = String(1 - Math.min(0.5, y / (stage.clientHeight * 1.6)));
+    return;
+  }
+  if (!g.drag && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) g.drag = true;
+  if (g.drag) {
+    const atEdge = (dx > 0 && R.page <= 1) || (dx < 0 && R.page + step() > N());
+    g.dx = atEdge ? dx * 0.25 : dx;
+    strip.style.transition = 'none';
+    strip.style.transform = `translate3d(${g.dx}px,0,0)`;
+  }
+});
+function endGesture(e, cancel) {
+  if (stroke && e.pointerId === stroke.id) { endStroke(); return; }
+  if (!g || e.pointerId !== g.id) return;
+  const gg = g; g = null;
+  if (cancel) { if (gg.vd) snapReaderBack(); else settle(); return; }
+  const dx = e.clientX - gg.x, dy = e.clientY - gg.y;
+  if (gg.vd) {
+    const H = stage.clientHeight, vy = dy / Math.max(1, performance.now() - gg.t);
+    if (dy > H * 0.2 || (vy > 0.8 && dy > 90)) {
+      reader.style.transition = 'transform 200ms ease, opacity 200ms ease';
+      reader.style.transform = `translate3d(0,${H}px,0)`; reader.style.opacity = '0';
+      setTimeout(() => { closeReader(); resetReaderPos(); }, 200);
+    } else snapReaderBack();
+    return;
+  }
+  const v = dx / Math.max(1, performance.now() - gg.t);
+  if (gg.drag) {
+    const W = stage.clientWidth;
+    if (Math.abs(gg.dx) > W * 0.16 || Math.abs(v) > 0.45) turn(dx < 0 ? 1 : -1, gg.dx);
+    else settle();
+    return;
+  }
+  if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
+    const r = stage.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width;
+    if (x < 0.3) prev(); else if (x > 0.7) next(); else toggleChrome();
+  }
+}
+stage.addEventListener('pointerup', e => endGesture(e, false));
+stage.addEventListener('pointercancel', e => endGesture(e, true));
+
+addEventListener('keydown', e => {
+  if (!R.open || $('#modal-root').firstChild || e.target.matches('input, textarea')) return;
+  const k = e.key;
+  if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter', 'MediaTrackNext'].includes(k)) { e.preventDefault(); next(); }
+  else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace', 'MediaTrackPrevious'].includes(k)) { e.preventDefault(); prev(); }
+  else if (k === 'Home') show(1);
+  else if (k === 'End') show(N());
+  else if (k === 'Escape' && !(document.fullscreenElement || document.webkitFullscreenElement)) { if (R.pen) setPen(false); else closeReader(); }
+  else if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); undoInk(); }
+});
+
+/* --- ink (zapiski) --- */
+const PEN_W = 0.0032, HL_W = 0.022, ERASE_R = 0.018;
+async function loadInk(key) {
+  if (R.ink.has(key)) return R.ink.get(key);
+  let v = []; try { v = (await DB.get('ink', key)) || []; } catch {}
+  if (!R.ink.has(key)) R.ink.set(key, v);
+  return R.ink.get(key);
+}
+function saveInk(key) { DB.put('ink', key, R.ink.get(key) || []).catch(() => storageFailed()); }
+const TX_SIZES = { s: 0.022, m: 0.03, l: 0.042 };
+function txBox(s, W, H) {
+  const lines = String(s.s || '').split('\n'); const fs = s.z * W;
+  const w = Math.max(...lines.map(l => l.length), 1) * fs * 0.58 + fs * 0.6, h = lines.length * fs * 1.25 + fs * 0.35;
+  return { x: s.p[0] * W, y: s.p[1] * H, w, h, fs, lines };
+}
+function drawText(ctx, s, W, H) {
+  const b = txBox(s, W, H);
+  ctx.save();
+  ctx.font = `600 ${b.fs}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+  const tw = Math.max(...b.lines.map(l => ctx.measureText(l).width), b.fs * 0.5);
+  ctx.globalAlpha = 0.78; ctx.fillStyle = '#fff';
+  ctx.fillRect(b.x - b.fs * 0.25, b.y, tw + b.fs * 0.5, b.h);
+  ctx.globalAlpha = 1; ctx.fillStyle = s.c; ctx.textBaseline = 'top';
+  b.lines.forEach((l, i) => ctx.fillText(l, b.x, b.y + b.fs * 0.2 + i * b.fs * 1.25));
+  ctx.restore();
+}
+function textAt(arr, x, y, r) {
+  for (let i = arr.length - 1; i >= 0; i--) { const s = arr[i]; if (s.t !== 'tx') continue; const b = txBox(s, r.width, r.height); const px = x * r.width, py = y * r.height; if (px >= b.x - b.fs * 0.3 && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) return s; }
+  return null;
+}
+function editText(view, r, x, y, existing) {
+  const arr = R.ink.get(view.key) || []; R.ink.set(view.key, arr);
+  let size = existing ? Object.keys(TX_SIZES).find(k => TX_SIZES[k] === existing.z) || 'm' : (S.settings.txs || 'm');
+  const color = existing ? existing.c : (S.settings.txc || '#c0262d');
+  modal(`<div class="txedit" style="display:flex;flex-direction:column;gap:12px"><h3>${existing ? 'Uredi besedilo' : 'Besedilo na noti'}</h3>
+    <textarea placeholder="npr. 2. kitica počasneje, vstop alt …">${existing ? esc(existing.s) : ''}</textarea>
+    <div class="row2"><span style="color:var(--muted)">Velikost</span>${['s', 'm', 'l'].map(k => `<button class="btn" data-sz="${k}" aria-pressed="${k === size}">${k === 's' ? 'Mala' : k === 'm' ? 'Srednja' : 'Velika'}</button>`).join('')}</div>
+    <div class="actions">${existing ? '<button class="btn danger" data-del>Izbriši</button>' : ''}<button class="btn" data-x>Prekliči</button><button class="btn primary" data-ok>Shrani</button></div></div>`, (m, close) => {
+    const ta = m.querySelector('textarea'); setTimeout(() => ta.focus(), 50);
+    m.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.sz) { size = b.dataset.sz; m.querySelectorAll('[data-sz]').forEach(x => x.setAttribute('aria-pressed', x.dataset.sz === size)); return; }
+      if (b.hasAttribute('data-x')) { close(); return; }
+      const before = arr.slice();
+      if (b.hasAttribute('data-del') && existing) { arr.splice(arr.indexOf(existing), 1); }
+      else if (b.hasAttribute('data-ok')) {
+        const txt = ta.value.replace(/\s+$/, ''); if (!txt) { if (existing) arr.splice(arr.indexOf(existing), 1); }
+        else if (existing) { existing.s = txt; existing.z = TX_SIZES[size]; }
+        else arr.push({ t: 'tx', c: color, p: [+x.toFixed(4), +y.toFixed(4)], s: txt, z: TX_SIZES[size] });
+        S.settings.txs = size; saveMeta();
+      } else return;
+      R.undo.push({ key: view.key, before }); saveInk(view.key); drawInk(view); close();
+    });
+  });
+}
+function drawStroke(ctx, s, W, H) {
+  if (s.t === 'tx') { drawText(ctx, s, W, H); return; }
+  const p = s.p; if (p.length < 2) return;
+  ctx.save();
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = s.c; ctx.globalAlpha = s.t === 'hl' ? 0.42 : 1;
+  ctx.lineWidth = (s.t === 'hl' ? HL_W : PEN_W) * W;
+  ctx.beginPath();
+  ctx.moveTo(p[0] * W, p[1] * H);
+  if (p.length === 2) ctx.lineTo(p[0] * W + 0.1, p[1] * H);
+  for (let i = 2; i < p.length - 2; i += 2) {
+    const mx = (p[i] + p[i + 2]) / 2, my = (p[i + 1] + p[i + 3]) / 2;
+    ctx.quadraticCurveTo(p[i] * W, p[i + 1] * H, mx * W, my * H);
+  }
+  ctx.lineTo(p[p.length - 2] * W, p[p.length - 1] * H);
+  ctx.stroke();
+  ctx.restore();
+}
+function drawInk(view, live) {
+  const cnv = inkCanvas(view);
+  const ctx = cnv.getContext('2d');
+  const W = cnv.width, H = cnv.height;
+  ctx.clearRect(0, 0, W, H);
+  for (const s of R.ink.get(view.key) || []) drawStroke(ctx, s, W, H);
+  if (live) drawStroke(ctx, live, W, H);
+}
+function redrawKey(key) { for (const el of strip.querySelectorAll('.pv')) if (el._view && el._view.key === key) drawInk(el._view); }
+function viewAt(x, y) {
+  for (const el of slotCur.children) { const r = el.getBoundingClientRect(); if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom && el._view) return { v: el._view, r }; }
+  return null;
+}
+function startStroke(e) {
+  const hit = viewAt(e.clientX, e.clientY); if (!hit) return;
+  if (R.anim) finishTurn();
+  if (e.pointerType === 'pen' && !penSeen) { penSeen = true; if (!R.pen) toast('Pisalo zaznano · piši kar po notah, prst obrača strani'); }
+  e.preventDefault();
+  try { stage.setPointerCapture(e.pointerId); } catch {}
+  const tool = S.settings.tool;
+  const strokes = R.ink.get(hit.v.key) || []; R.ink.set(hit.v.key, strokes);
+  stroke = { id: e.pointerId, v: hit.v, r: hit.r, tool, before: strokes.slice(), changed: false };
+  if (tool === 'text') {
+    stroke = null;
+    const x = (e.clientX - hit.r.left) / hit.r.width, y = (e.clientY - hit.r.top) / hit.r.height;
+    editText(hit.v, hit.r, x, y, textAt(strokes, x, y, hit.r));
+    return;
+  }
+  if (tool === 'eraser') { eraseAt(e); return; }
+  const [t, c] = tool.split(':');
+  stroke.s = { t, c, p: [] };
+  addPoint(e);
+}
+function addPoint(e) {
+  const r = stroke.r; const s = stroke.s;
+  const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+  const n = s.p.length;
+  if (n >= 2 && Math.hypot(x - s.p[n - 2], y - s.p[n - 1]) < 0.0012) return;
+  s.p.push(+x.toFixed(4), +y.toFixed(4));
+}
+let rafId = 0;
+function moveStroke(e) {
+  if (stroke.tool === 'eraser') { eraseAt(e); return; }
+  const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+  for (const ev of (evs.length ? evs : [e])) addPoint(ev);
+  if (!rafId) rafId = requestAnimationFrame(() => { rafId = 0; if (stroke && stroke.s) drawInk(stroke.v, stroke.s); });
+}
+function eraseAt(e) {
+  const r = stroke.r; const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+  const arr = R.ink.get(stroke.v.key) || [];
+  const keep = arr.filter(s => { if (s.t === 'tx') return textAt([s], x, y, r) !== s; for (let i = 0; i < s.p.length; i += 2) if (Math.hypot(s.p[i] - x, (s.p[i + 1] - y) * (r.height / r.width)) < ERASE_R) return false; return true; });
+  if (keep.length !== arr.length) { R.ink.set(stroke.v.key, keep); stroke.changed = true; drawInk(stroke.v); }
+}
+function endStroke() {
+  const st = stroke; stroke = null;
+  if (st.s && st.s.p.length >= 2) { R.ink.get(st.v.key).push(st.s); st.changed = true; }
+  if (st.changed) { R.undo.push({ key: st.v.key, before: st.before }); if (R.undo.length > 60) R.undo.shift(); saveInk(st.v.key); }
+  drawInk(st.v);
+}
+function undoInk() {
+  const u = R.undo.pop(); if (!u) { toast('Ni česa razveljaviti'); return; }
+  R.ink.set(u.key, u.before); saveInk(u.key); redrawKey(u.key);
+}
+function setPen(on) {
+  R.pen = on;
+  reader.classList.toggle('penmode', on);
+  $('#penbar').hidden = !on;
+  $('#r-pen').setAttribute('aria-pressed', on);
+  document.querySelectorAll('[data-tool]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tool === S.settings.tool));
+}
+$('#r-pen').addEventListener('click', () => { setPen(!R.pen); if (R.pen) toast('Piši s prstom ali pisalom · strani obračaj z gumboma spodaj'); showChrome(); });
+$('#penbar').addEventListener('click', e => {
+  const b = e.target.closest('[data-tool]'); if (!b) return;
+  S.settings.tool = b.dataset.tool; if (b.dataset.tool.startsWith('pen:')) S.settings.txc = b.dataset.tool.slice(4); saveMeta(); setPen(true);
+  if (b.dataset.tool === 'text') toast('Tapni na noto, kamor želiš napisati besedilo · tapni obstoječe besedilo za urejanje');
+});
+$('#pen-undo').addEventListener('click', undoInk);
+$('#pen-done').addEventListener('click', () => setPen(false));
+$('#pen-clear').addEventListener('click', e => {
+  const b = e.currentTarget;
+  if (!b._armed) { b._armed = true; b.style.color = '#ec7a7f'; toast('Tapni še enkrat za brisanje zapiskov na tej strani'); setTimeout(() => { b._armed = false; b.style.color = ''; }, 3000); return; }
+  b._armed = false; b.style.color = '';
+  for (const el of slotCur.children) { const v = el._view; if (!v) continue; R.undo.push({ key: v.key, before: (R.ink.get(v.key) || []).slice() }); R.ink.set(v.key, []); saveInk(v.key); drawInk(v); }
+  toast('Zapiski na strani pobrisani · razveljaviš s puščico');
+});
+
+/* --- bars --- */
+$('#r-back').addEventListener('click', closeReader);
+$('#r-plan-next').addEventListener('click', () => { planStep(1); showChrome(); });
+$('#r-plan-prev').addEventListener('click', () => { planStep(-1); showChrome(); });
+$('#r-prev').addEventListener('click', () => { prev(); showChrome(); });
+$('#r-next').addEventListener('click', () => { next(); showChrome(); });
+$('#r-slider').addEventListener('input', e => { $('#r-pg').innerHTML = `${e.target.value} <small>/ ${N()}</small>`; showChrome(); });
+$('#r-slider').addEventListener('change', e => { show(+e.target.value); });
+$('#r-fav').addEventListener('click', () => {
+  const vs = visibleSongs();
+  if (vs.length > 1) { songActions(vs, 'fav'); showChrome(); return; }
+  const s = vs[0] || currentSong(); if (s) { toggleFav(s.key); updateChrome(); toast(S.favs.has(s.key) ? 'Dodano med priljubljene' : 'Odstranjeno iz priljubljenih'); } showChrome();
+});
+$('#r-play').addEventListener('click', () => {
+  if (!$('#playerbar').hidden) { closePlayer(); showChrome(); return; }
+  const vs = visibleSongs();
+  if (vs.length > 1) { songActions(vs, 'play'); showChrome(); return; }
+  const s = vs[0] || currentSong(); if (s) openPlayer(s); else toast('Na tej strani ni pesmi iz kazala');
+});
+$('#pl-close').addEventListener('click', () => { closePlayer(); showChrome(); });
+$('#pl-play').addEventListener('click', () => { if (!PL.data) return; if (PL.playing) plPause(); else { if (PL.pos >= PL.data.len - 0.01) PL.pos = 0; plStart(PL.pos); } showChrome(); });
+$('#pl-seek').addEventListener('input', e => { if (!PL.data) return; const p = +e.target.value; if (PL.playing) plSeek(p); else { PL.pos = p; plUi(); } });
+$('#pl-loop').addEventListener('click', () => { S.settings.loop = !S.settings.loop; saveMeta(); plUi(); });
+$('#pl-load').addEventListener('click', () => $('#xmlfile').click());
+$('#xmlfile').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f && PL.song) importSongXml(f, PL.song).then(() => { PL.data = notesFor(PL.song); plUi(); }); });
+$('#playerbar').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || !PL.song) return;
+  if (b.dataset.bpm) { const t = S.settings.tempo = S.settings.tempo || {}; const pos = curPos(); t[PL.song.key] = Math.max(30, Math.min(200, Math.round(plBpm()) + +b.dataset.bpm)); saveMeta(); if (PL.playing) plSeek(pos, true); else plUi(); }
+  if (b.dataset.tr) { S.settings.transpose = Math.max(-7, Math.min(7, plTr() + +b.dataset.tr)); saveMeta(); plRestartIfPlaying(); }
+  if (b.dataset.voice) {
+    const v = +b.dataset.voice; const m = new Set(S.settings.mute || []);
+    if (b._lp) { b._lp = false; return; }
+    if (m.has(v)) m.delete(v); else m.add(v);
+    if (m.size >= (PL.data?.voices || 4)) m.delete(v);
+    S.settings.mute = [...m]; saveMeta(); plRestartIfPlaying();
+  }
+  showChrome();
+});
+// dolg pritisk na glas = poudari samo ta glas (za učenje svojega glasu)
+$('#playerbar').addEventListener('pointerdown', e => {
+  const b = e.target.closest('[data-voice]'); if (!b) return;
+  const v = +b.dataset.voice; clearTimeout(b._t);
+  b._t = setTimeout(() => { b._lp = true; S.settings.solo = S.settings.solo === v ? null : v; saveMeta(); plRestartIfPlaying(); toast(S.settings.solo === v ? `Poudarjen glas ${VOICE_NAMES[v]}` : 'Vsi glasovi enako glasni'); }, 550);
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach(t => $('#playerbar').addEventListener(t, e => { const b = e.target.closest('[data-voice]'); if (b) clearTimeout(b._t); }));
+$('#r-pdf').addEventListener('click', () => {
+  const vs = visibleSongs();
+  if (vs.length > 1) { songActions(vs, 'pdf'); showChrome(); return; }
+  const s = vs[0] || currentSong(); if (s) exportSongs([s], songFileName(s)); showChrome();
+});
+$('#r-spread').addEventListener('click', () => {
+  S.settings.spread = !S.settings.spread; saveMeta();
+  if (S.settings.spread && stage.clientWidth <= stage.clientHeight * 1.15) toast('Dve strani se pokažeta, ko tablico obrneš ležeče');
+  R.views.clear(); show(R.page, true); showChrome();
+});
+$('#r-fs').addEventListener('click', () => { toggleFs(); showChrome(); });
+$('#r-edit').addEventListener('click', () => { clearTimeout(R.quietT); editTitle(); });
+let rsT = 0;
+addEventListener('resize', () => { clearTimeout(rsT); rsT = setTimeout(() => { if (R.open && R.pdf) { R.views.clear(); show(R.page, true); } }, 160); });
+
+function editTitle() {
+  if (!R.pdf) return;
+  const page = R.page, d = R.doc;
+  const existing = (d.songs || []).find(s => s.page === page);
+  modal(`<h3>Naslov strani ${page}</h3>
+    <p>Vpiši naslov pesmi, ki se začne na tej strani. Pesem se doda v iskalnik.</p>
+    <label class="field">Naslov<input id="et-title" value="${esc(existing ? existing.title : '')}" autocomplete="off"></label>
+    <label class="field">Stran<input id="et-page" type="number" inputmode="numeric" min="1" max="${N()}" value="${page}"></label>
+    <div class="actions">${existing ? '<button class="btn danger" id="et-del">Odstrani naslov</button>' : ''}<button class="btn" id="et-cancel">Prekliči</button><button class="btn primary" id="et-save">Shrani</button></div>`,
+  (m, close) => {
+    const ti = m.querySelector('#et-title'); ti.focus();
+    m.querySelector('#et-cancel').onclick = close;
+    const saveIt = async () => {
+      const t = ti.value.trim(); const p = clamp(parseInt(m.querySelector('#et-page').value, 10) || page, 1, N());
+      if (!t) { ti.focus(); return; }
+      d.songs = (d.songs || []).filter(s => s !== existing);
+      d.songs.push({ page: p, title: t, src: 'manual' }); d.songs.sort((a, b) => a.page - b.page);
+      await saveDoc(d); buildSongs(); updateChrome(); close(); toast(`»${t}« dodana v iskalnik`);
+    };
+    m.querySelector('#et-save').onclick = saveIt;
+    ti.addEventListener('keydown', e => { if (e.key === 'Enter') saveIt(); });
+    const del = m.querySelector('#et-del');
+    if (del) del.onclick = async () => { d.songs = d.songs.filter(s => s !== existing); await saveDoc(d); buildSongs(); updateChrome(); close(); toast('Naslov odstranjen'); };
+  });
+}
+
+/* --- fullscreen & wake lock --- */
+function enterFs() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement) return true;
+  const f = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!f) return false;
+  try { const p = f.call(el, { navigationUI: 'hide' }); if (p && p.catch) p.catch(() => {}); } catch {}
+  return true;
+}
+function toggleFs() {
+  if (document.fullscreenElement || document.webkitFullscreenElement) { try { (document.exitFullscreen || document.webkitExitFullscreen).call(document)?.catch?.(() => {}); } catch {} return; }
+  if (!enterFs()) toast('Ta brskalnik ne podpira celega zaslona. Dodaj aplikacijo na začetni zaslon.');
+}
+async function wakeOn() { try { if (navigator.wakeLock && !R.wake) { R.wake = await navigator.wakeLock.request('screen'); R.wake.addEventListener?.('release', () => { R.wake = null; }); } } catch {} }
+function wakeOff() { try { R.wake?.release(); } catch {} R.wake = null; }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && R.open && S.settings.keepAwake) wakeOn(); });
+
+/* ---------------- boot ---------------- */
+async function boot() {
+  let meta = LS.get('meta', null);
+  try {
+    const docs = await DB.all('docs');
+    S.docs = (docs || []).filter(d => d && d.id).map(d => ({ ...d, status: 'ready' }));
+    const m = await DB.get('meta', 'main'); if (m) meta = m;
+    try { S.notes = (await DB.get('meta', 'notes')) || {}; } catch {}
+  } catch { S.storageOK = false; }
+  if (meta) {
+    S.favs = new Set(meta.favs || []); S.recent = meta.recent || []; S.plans = meta.plans || []; S.counts = meta.counts || {};
+    Object.assign(S.settings, meta.settings || {}); if (meta.sort) S.sort = meta.sort;
+    if (!S.settings.fsOff1) { S.settings.autoFs = false; S.settings.fsOff1 = 1; }
+    if (!S.settings.secDef1) { S.sort = 'sec'; S.settings.secDef1 = 1; }
+  }
+  if (location.hash === '#beri') location.hash = '';
+  buildSongs(); render();
+  try { navigator.storage?.persist?.().catch(() => {}); } catch {}
+  if (!window.pdfjsLib) toast('Pregledovalnik PDF se ni naložil. Preveri povezavo in osveži stran.');
+}
+window.pesmarica = { addFiles };
+boot();
+})();
+</script>
+
+</body>
+</html>
