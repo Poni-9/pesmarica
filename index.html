@@ -375,6 +375,7 @@ button { cursor: pointer; }
 </div>
 
 <input type="file" id="file" accept="application/pdf,.pdf,.json,application/json" multiple hidden>
+<input type="file" id="notesfile" accept=".json,application/json" multiple hidden>
 <input type="file" id="xmlfile" accept=".musicxml,.xml,.mxl,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml" hidden>
 <div id="modal-root"></div>
 
@@ -1110,7 +1111,7 @@ function rowHtml(s) {
   const fav = S.favs.has(s.key);
   return `<li class="row"><button class="row-main" data-open="${esc(s.key)}">
     <span class="num${s.num.includes('-') ? ' range' : ''}">${numLabel(s.num)}</span>
-    <span class="tt"><b>${esc(s.title)}${isPop(s) ? '<em class="pop">znana</em>' : ''}</b>${s.comp ? `<span>${esc(s.comp)}</span>` : ''}</span>
+    <span class="tt"><b>${esc(s.title)}${isPop(s) ? '<em class="pop">znana</em>' : ''}${S.notes[s.num || s.key] ? '<em class="pop" title="Ima note za predvajanje">♪</em>' : ''}</b>${s.comp ? `<span>${esc(s.comp)}</span>` : ''}</span>
     ${locLabel(s)}</button>
     <button class="star" data-fav="${esc(s.key)}" aria-pressed="${fav}" aria-label="${fav ? 'Odstrani iz priljubljenih' : 'Dodaj med priljubljene'}">${ICON_STAR(fav)}</button></li>`;
 }
@@ -1634,7 +1635,7 @@ function plUi() {
   const tr = plTr(); $('#pl-tr').textContent = tr ? (tr > 0 ? '+' + tr : String(tr)) : '0';
   document.querySelectorAll('#playerbar [data-voice]').forEach(b => { const v = +b.dataset.voice; b.hidden = v >= (d.voices || 4); b.setAttribute('aria-pressed', voiceOn(v)); b.classList.toggle('solo', S.settings.solo === v); });
   $('#pl-loop').setAttribute('aria-pressed', !!S.settings.loop);
-  $('#pl-src').textContent = d.src === 'omr' ? 'Prebrano samodejno – lahko vsebuje napake' : d.src === 'file' ? 'Iz tvoje datoteke MusicXML' : '';
+  $('#pl-src').textContent = d.src === 'omr' ? `Prebrano samodejno iz not${d.bad ? ` · ${d.bad} ${d.bad === 1 ? 'takt' : 'taktov'} morda napačnih` : ''}` : d.src === 'file' ? 'Iz tvoje datoteke MusicXML' : '';
 }
 function openPlayer(s) {
   if (PL.song && s && PL.song.key !== s.key) plStop();
@@ -1730,7 +1731,7 @@ function booksHtml() {
     <div class="setrow"><label for="set-spread">Dve strani hkrati, ko je tablica ležeča<small>Obrača se po dve strani naenkrat.</small></label><input type="checkbox" id="set-spread" data-set="spread" ${S.settings.spread ? 'checked' : ''}></div>
     <div class="setrow"><label for="set-awake">Zaslon naj med branjem ne ugasne</label><input type="checkbox" id="set-awake" data-set="keepAwake" ${S.settings.keepAwake ? 'checked' : ''}></div>
     <div class="section-head"><h2>Note za predvajanje<em>${Object.keys(S.notes).length} pesmi</em></h2></div>
-    <div class="setrow"><label>Zapis not za igranje<small>Med branjem tapni zgoraj gumb z notami. Note posamezne pesmi naložiš tam (datoteka MusicXML, npr. iz MuseScora ali Audiverisa), paket za več pesmi (.json) pa z »Dodaj PDF«. Note ostanejo samo v tej napravi.</small></label>${Object.keys(S.notes).length ? '<button class="btn danger" data-clearnotes>Izbriši vse note</button>' : ''}</div>
+    <div class="setrow"><label>Zapis not za igranje<small>Med branjem tapni zgoraj gumb z notami. Note posamezne pesmi naložiš tam (datoteka MusicXML, npr. iz MuseScora ali Audiverisa), paket za več pesmi (.json) pa z »Dodaj PDF«. Note ostanejo samo v tej napravi.</small></label><button class="btn primary" data-importnotes>Uvozi note (.json)</button>${Object.keys(S.notes).length ? '<button class="btn danger" data-clearnotes>Izbriši vse note</button>' : ''}</div>
     <div class="help">
       <h3>Obračanje strani</h3>
       Tapni desno tretjino strani za naprej, levo za nazaj in sredino za meni. Lahko tudi povlečeš stran s prstom. Bluetooth pedal deluje s tipkami <kbd>→</kbd> <kbd>←</kbd>, <kbd>PgDn</kbd> <kbd>PgUp</kbd> ali <kbd>preslednica</kbd>.
@@ -1766,6 +1767,7 @@ content.addEventListener('click', e => {
   if (b.hasAttribute('data-more')) { S.limit += 400; render(); return; }
   if (b.dataset.sort) { S.sort = b.dataset.sort; saveMeta(); render(); return; }
   if (b.hasAttribute('data-newplan')) { newPlan(); return; }
+  if (b.hasAttribute('data-importnotes')) { $('#notesfile').click(); return; }
   if (b.hasAttribute('data-clearnotes')) {
     if (!armed.get(b)) { armed.set(b, 1); b.classList.add('armed'); b.textContent = 'Res izbriši?'; setTimeout(() => { if (b.isConnected) { armed.delete(b); b.classList.remove('armed'); b.textContent = 'Izbriši vse note'; } }, 3500); return; }
     S.notes = {}; saveNotes(); render(); return;
@@ -2293,6 +2295,7 @@ $('#pl-play').addEventListener('click', () => { if (!PL.data) return; if (PL.pla
 $('#pl-seek').addEventListener('input', e => { if (!PL.data) return; const p = +e.target.value; if (PL.playing) plSeek(p); else { PL.pos = p; plUi(); } });
 $('#pl-loop').addEventListener('click', () => { S.settings.loop = !S.settings.loop; saveMeta(); plUi(); });
 $('#pl-load').addEventListener('click', () => $('#xmlfile').click());
+$('#notesfile').addEventListener('change', async e => { const fs = [...(e.target.files || [])]; e.target.value = ''; for (const f of fs) await importNotesPack(f); });
 $('#xmlfile').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f && PL.song) importSongXml(f, PL.song).then(() => { PL.data = notesFor(PL.song); plUi(); }); });
 $('#playerbar').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || !PL.song) return;
