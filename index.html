@@ -1953,8 +1953,27 @@ async function zUpload(d) {
 }
 let zTimer = 0;
 function zSchedule() { clearTimeout(zTimer); if (zborDocs().some(d => !S.notes['z:' + d.id] && ['wait', 'up', 'none'].includes((d.omr || {}).state))) zTimer = setTimeout(zPoll, 25000); }
+/* note, ki so že v repozitoriju (scores.json): prenesi jih v zavihek Zbor */
+let zSyncing = false;
+async function zSync() {
+  const c = ghCfg(); if (!c.token || !navigator.onLine || zSyncing) return; zSyncing = true;
+  try {
+    const r = await gh('contents/scores.json', { raw: true }); if (!r.ok) return;
+    const list = await r.json(); const del = S.settings.zDeleted || []; let n = 0;
+    for (const it of list) {
+      if (S.docs.some(d => d.id === it.id) || del.includes(it.id)) continue;
+      const pr = await gh('contents/' + it.pdf.split('/').map(encodeURIComponent).join('/'), { raw: true }); if (!pr.ok) continue;
+      const file = new File([await pr.blob()], it.title + '.pdf', { type: 'application/pdf' });
+      const doc = { id: it.id, name: it.title, comp: it.comp || '', size: file.size, pages: it.pages, book: null, songs: [], added: Date.now(), status: 'ready', zbor: true, omr: { state: 'wait' }, remote: true };
+      memFiles.set(doc.id, file); try { await DB.put('files', doc.id, file); } catch { storageFailed(); }
+      S.docs.push(doc); await saveDoc(doc); n++;
+    }
+    if (n) { buildSongs(); render(); toast(`Prenesenih skladb za zbor: ${n}`); }
+  } catch {} finally { zSyncing = false; }
+}
 async function zPoll() {
   const c = ghCfg(); if (!c.token || !navigator.onLine) { zSchedule(); return; }
+  await zSync();
   let changed = false;
   for (const d of zborDocs()) {
     if (S.notes['z:' + d.id]) continue;
@@ -2007,7 +2026,7 @@ function zMenu(d) {
       if (b.hasAttribute('data-del')) {
         if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = 'Res izbriši?'; return; }
         for (let i = 1; i <= d.pages; i++) try { await DB.del('files', `zimg:${d.id}:${i}`); } catch {}
-        delete S.notes['z:' + d.id]; await saveNotes(); S.sets.forEach(st => { st.items = st.items.filter(k => k !== 'z:' + d.id); }); saveMeta();
+        delete S.notes['z:' + d.id]; await saveNotes(); S.sets.forEach(st => { st.items = st.items.filter(k => k !== 'z:' + d.id); }); if (d.remote) S.settings.zDeleted = [...(S.settings.zDeleted || []), d.id]; saveMeta();
         close(); await removeDoc(d);
       }
     });
