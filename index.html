@@ -125,6 +125,9 @@ button { cursor: pointer; }
 .pick .n { font-family: var(--f-display); color: var(--gold); font-weight: 600; font-size: 18px; font-variant-numeric: lining-nums tabular-nums; }
 .pick .t { font-family: var(--f-title); font-weight: 600; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pick .x { border: 0; background: none; color: var(--muted); width: 42px; height: 42px; font-size: 24px; line-height: 1; flex: none; }
+.slotnote { color: var(--muted); font-size: 14px; padding: 9px 0; }
+.slotrow.off > h4 { opacity: .5; }
+.slotrow > h4 small { display: block; font-weight: 500; letter-spacing: 0; text-transform: none; opacity: .8; }
 .addpick { align-self: flex-start; border: 1px dashed var(--line); background: none; color: var(--gold); border-radius: 12px; padding: 8px 14px; font-weight: 600; min-height: 40px; }
 @media (max-width: 560px) { .slotrow { grid-template-columns: 1fr; } .slotrow > h4 { padding-top: 0; } }
 .picker input { font: inherit; width: 100%; box-sizing: border-box; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 12px; padding: 12px 14px; }
@@ -1202,53 +1205,210 @@ const secIdx = name => SECTIONS.findIndex(x => x[1] === name);
 const inSecs = (s, names) => { const i = secOf(s); return i >= 0 && names.includes(SECTIONS[i][1]); };
 function easter(y) { const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1; return new Date(y, mo - 1, da); }
 const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
-function season(d) {
-  d = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const y = d.getFullYear(), E = easter(y);
-  const xmas = new Date(y, 11, 25), adv1 = addDays(xmas, -(xmas.getDay() || 7) - 21);
-  const ep = new Date(y, 0, 6), baptism = addDays(ep, 7 - ep.getDay());
-  if (d >= new Date(y, 11, 25) || d <= baptism) return { name: 'Božični čas', secs: ['Božični čas'] };
-  if (d >= adv1) return { name: 'Adventni čas', secs: d >= new Date(y, 11, 17) ? ['Božična osemdnevnica (17.–24. dec.)', 'Adventni čas'] : ['Adventni čas'] };
-  if (d >= addDays(adv1, -7)) return { name: 'Kristus Kralj', secs: ['Kristus Kralj'] };
-  const ash = addDays(E, -46);
-  if (d >= ash && d < addDays(E, -7)) return { name: 'Postni čas', secs: ['Postni čas'] };
-  if (+d === +addDays(E, -7)) return { name: 'Cvetna nedelja', secs: ['Cvetna nedelja', 'Postni čas'] };
-  if (d > addDays(E, -7) && d < E) return { name: 'Veliki teden', secs: ['Velikonočno tridnevje', 'Postni čas'] };
-  if (d >= E && d <= addDays(E, 49)) return { name: 'Velikonočni čas', secs: d >= addDays(E, 42) ? ['Binkošti', 'Velikonočni čas'] : ['Velikonočni čas'] };
-  if (d > addDays(E, 49) && d <= addDays(E, 63)) return { name: 'Sv. Rešnje telo', secs: ['Sv. Rešnje telo in kri'] };
-  if (d > addDays(E, 63) && d <= addDays(E, 70)) return { name: 'Srce Jezusovo', secs: ['Srce Jezusovo'] };
-  if (d.getMonth() === 4) return { name: 'Šmarnice (maj)', secs: ['Šmarnične pesmi'] };
-  return { name: 'Čas med letom', secs: [] };
+/* ---- liturgični koledar: kateri dan je, kateri čas, kaj se (ne) poje ---- */
+const dayIso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const dDiff = (a, b) => Math.round((a - b) / 864e5);
+const SEAS_SECS = ['Adventni čas', 'Božična osemdnevnica (17.–24. dec.)', 'Božični čas', 'Postni čas', 'Cvetna nedelja', 'Velikonočno tridnevje', 'Velikonočni čas', 'Binkošti', 'Sv. Rešnje telo in kri', 'Srce Jezusovo', 'Kristus Kralj', 'Šmarnične pesmi', 'Pogreb', 'Rožni venec', 'Križev pot', 'Mašniško posvečenje', 'Sveti krst', 'Zakrament sprave (misijon)', 'Misijonska nedelja'];
+function litDay(date) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate(), sun = d.getDay() === 0;
+  const E = easter(y), at = n => +d === +addDays(E, n);
+  const xmas = new Date(y, 11, 25), adv1 = addDays(xmas, -(xmas.getDay() || 7) - 21), king = addDays(adv1, -7);
+  const ep = new Date(y, 0, 6), bap = ep.getDay() === 0 ? new Date(y, 0, 7) : addDays(ep, 7 - ep.getDay());
+  const ash = addDays(E, -46), pent = addDays(E, 49);
+  const litY = d >= adv1 ? y + 1 : y, cyc = ['C', 'A', 'B'][litY % 3];
+  // osnovni čas
+  let s;
+  if (d >= addDays(xmas, -1) || d <= bap) s = 'bozic';
+  else if (d >= adv1) s = 'advent';
+  else if (d >= ash && d < addDays(E, -7)) s = 'post';
+  else if (d >= addDays(E, -7) && d < addDays(E, -3)) s = 'vteden';
+  else if (d >= addDays(E, -3) && d < E) s = 'tridnevje';
+  else if (d >= E && d <= pent) s = 'vnoc';
+  else s = 'medletom';
+  const SN = { bozic: 'Božični čas', advent: 'Adventni čas', post: 'Postni čas', vteden: 'Veliki teden', tridnevje: 'Velikonočno tridnevje', vnoc: 'Velikonočni čas', medletom: 'Čas med letom' };
+  const r = { s, seasonName: SN[s], cyc, name: '', rank: 0, secs: [], kw: null, gloria: !['advent', 'post', 'vteden'].includes(s), alleluia: !['post', 'vteden'].includes(s), marian: false, saints: false, dead: false, psalm: null, evang: null };
+  const wk = n => Math.floor(dDiff(d, n) / 7) + 1;
+  // nedelje in tedni
+  if (s === 'advent') { r.name = `${wk(adv1)}. adventn${sun ? 'a nedelja' : 'i teden'}`; r.secs = d >= new Date(y, 11, 17) ? ['Božična osemdnevnica (17.–24. dec.)', 'Adventni čas'] : ['Adventni čas']; r.psalm = /^Advent [12]$/; r.evang = /advent/i; if (wk(adv1) === 3 && sun) r.name += ' (nedelja veselja)'; }
+  if (s === 'bozic') { r.secs = ['Božični čas']; r.name = 'Božični čas'; r.psalm = /^Božič [12]$/; r.evang = /božič/i; }
+  if (s === 'post') { const w = wk(addDays(ash, 4)); r.name = +d === +ash ? 'Pepelnica' : w < 1 || (w === 1 && !sun) ? 'Po pepelnici' : `${w}. postn${sun ? 'a nedelja' : 'i teden'}`; r.secs = ['Postni čas']; r.psalm = /^Post [123]$/; r.evang = /post/i; if (sun && w === 4) r.name += ' (nedelja veselja)'; if (+d === +ash) r.rank = 2; }
+  if (s === 'vteden') { r.name = at(-7) ? 'Cvetna nedelja' : 'Veliki teden'; r.secs = at(-7) ? ['Cvetna nedelja', 'Postni čas'] : ['Postni čas', 'Velikonočno tridnevje']; r.psalm = /^Veliki teden$/; r.evang = /post/i; r.rank = at(-7) ? 3 : 1; }
+  if (s === 'tridnevje') { r.name = at(-3) ? 'Veliki četrtek' : at(-2) ? 'Veliki petek' : 'Velika sobota (vigilija)'; r.secs = ['Velikonočno tridnevje']; r.psalm = /^Veliki teden$/; r.evang = at(-1) ? /velika noč/i : /post/i; r.gloria = at(-3) || at(-1); r.alleluia = at(-1); r.rank = 4; }
+  if (s === 'vnoc') { const w = wk(E); r.name = at(0) ? 'Velika noč' : at(7) ? '2. velikonočna nedelja (bela nedelja)' : at(39) ? 'Gospodov vnebohod' : at(49) ? 'Binkošti' : sun ? `${w}. velikonočna nedelja` : dDiff(d, E) < 8 ? 'Velikonočna osmina' : 'Velikonočni čas'; r.secs = dDiff(d, E) >= 42 ? ['Binkošti', 'Velikonočni čas'] : ['Velikonočni čas']; r.psalm = at(49) ? /^Binkošti$/ : /^Velika noč [1-4]$/; r.evang = at(49) ? /binkošti/i : /velika noč/i; r.marianAnt = /regina caeli/i; if (at(0) || at(49)) r.rank = 4; if (at(39)) r.rank = 3; }
+  if (s === 'medletom') {
+    const n = d < ash ? Math.floor(dDiff(d, addDays(bap, -bap.getDay())) / 7) + 1 : 34 - Math.ceil(dDiff(king, d) / 7);
+    r.ord = n; r.name = `${n}. ${sun ? 'nedelja' : 'teden'} med letom`;
+    r.psalm = new RegExp(`^Nedelje med letom ${((n - 1) % 10) + 1}( |$)`); r.evang = new RegExp(`Nedelje med letom ${((n - 1) % 7) + 1}$`);
+    if (+d === +addDays(pent, 7)) { r.name = 'Sveta Trojica'; r.rank = 3; }
+    if (+d === +addDays(pent, 11) || (sun && +d === +addDays(pent, 14))) { r.name = +d === +addDays(pent, 11) ? 'Sv. Rešnje telo in kri' : 'Nedelja sv. Rešnjega telesa in krvi'; r.secs = ['Sv. Rešnje telo in kri']; r.psalm = /^Sv\. Rešnje telo$/; r.evang = /rešnje telo/i; r.rank = 3; }
+    if (+d === +addDays(pent, 19)) { r.name = 'Srce Jezusovo'; r.secs = ['Srce Jezusovo']; r.rank = 3; }
+    if (+d === +king) { r.name = 'Kristus Kralj'; r.secs = ['Kristus Kralj']; r.rank = 3; }
+    if (m === 5 && !r.secs.length && r.rank < 3) { r.secs = ['Šmarnične pesmi']; r.seasonName = 'Šmarnice (maj)'; }
+    if (m === 10 && !r.secs.length && r.rank < 3) { r.secs = ['Rožni venec']; r.seasonName = 'Rožnovenski mesec'; }
+  }
+  if (s === 'bozic') {
+    const hf = (() => { for (let k = 26; k <= 31; k++) { const t = new Date(m === 12 ? y : y - 1, 11, k); if (t.getDay() === 0) return t; } return new Date(m === 12 ? y : y - 1, 11, 30); })();
+    if (m === 12 && day === 24) { r.name = 'Sveti večer (polnočnica)'; r.rank = 4; }
+    if (m === 12 && day === 25) { r.name = 'Božič'; r.rank = 4; }
+    if (m === 12 && day === 26) { r.name = 'Sv. Štefan'; r.rank = 2; }
+    if (+d === +hf) { r.name = 'Sveta družina'; r.rank = 3; }
+    if (m === 1 && day === 1) { r.name = 'Marija, Božja Mati (novo leto)'; r.marian = true; r.rank = 4; }
+    if (m === 1 && day === 6) { r.name = 'Gospodovo razglašenje (Sveti trije kralji)'; r.kw = /kralj|zvezd|modr/i; r.psalm = /^Gospodovo razglašenje$/; r.rank = 4; }
+    if (+d === +bap) { r.name = 'Jezusov krst'; r.rank = 3; }
+    if (m === 12 && day === 31) { r.name = 'Zahvala ob koncu leta'; r.secs = ['Božični čas']; r.thanks = true; }
+    if (!r.name || r.name === 'Božični čas') r.name = 'Božični čas';
+  }
+  // praznovanja s stalnim datumom (nad nedeljo med letom)
+  const fx = (mm, dd, name, o) => { if (m === mm && day === dd) Object.assign(r, { name, rank: Math.max(r.rank, o.rank || 3) }, o); };
+  if (s === 'medletom' || s === 'advent' || s === 'post') {
+    fx(2, 2, 'Jezusovo darovanje (svečnica)', { marian: true, kw: /svečn|darov|simeon|luči/i });
+    fx(3, 19, 'Sv. Jožef', { saints: true, kw: /jožef|rednik/i, gloria: true });
+    fx(3, 25, 'Gospodovo oznanjenje', { marian: true, kw: /angel|oznan|češčen/i, gloria: true });
+    fx(6, 29, 'Sv. Peter in Pavel', { saints: true, kw: /peter|petrus|pavel|apostol|junaka dva/i });
+    fx(8, 15, 'Marijino vnebovzetje (veliki šmaren)', { marian: true, kw: /nebes|kraljic|vnebovz/i, rank: 4 });
+    fx(9, 8, 'Marijino rojstvo (mali šmaren)', { marian: true });
+    fx(10, 7, 'Rožnovenska Mati Božja', { marian: true, secs: ['Rožni venec'] });
+    fx(11, 1, 'Vsi sveti', { saints: 'all', kw: /vsi svet|nebes|v raju|blažen/i, rank: 4 });
+    fx(11, 2, 'Spomin vseh vernih rajnih', { dead: true, secs: ['Pogreb'], gloria: false, rank: 3 });
+    fx(12, 8, 'Brezmadežno spočetje', { marian: true, kw: /brezmadež|čist|neomadež/i, gloria: true, rank: 4 });
+    if (m === 10 && sun && day >= 18 && day <= 24) Object.assign(r, { name: 'Misijonska nedelja', secs: ['Misijonska nedelja'] });
+  }
+  if (r.marian) { r.psalm = r.psalm && r.rank < 3 ? r.psalm : /^Za Marijine praznike$/; r.evang = /Marijine/i; }
+  if (r.saints && s === 'medletom') r.evang = /svetnikov/i;
+  if (r.dead) { r.psalm = /^Pri mašah za rajne$/; }
+  if (r.rank >= 3 && (s === 'advent' || s === 'post') && /oznanjenje|jožef|brezmadežno/i.test(r.name)) r.gloria = true;
+  if (!r.marianAnt) r.marianAnt = s === 'vnoc' ? /regina caeli/i : /salve regina|ave maris/i;
+  return r;
 }
+function season(d) { const L = litDay(d); return { name: L.seasonName, secs: L.secs }; }
+
 const SLOTS = [
-  { id: 'vstop', t: 'Vstop', secs: ['Mašne pesmi (začetek maše)'], seas: true },
-  { id: 'kyrie', t: 'Gospod, usmili se', secs: ['Maše'], f: /usmili|kyrie/i },
-  { id: 'gloria', t: 'Slava', secs: ['Maše'], f: /slava|gloria/i, noIn: ['Adventni čas', 'Postni čas', 'Veliki teden', 'Cvetna nedelja'] },
-  { id: 'psalm', t: 'Psalm', secs: ['Psalmi po berilu'] },
-  { id: 'evang', t: 'Pred evangelijem', secs: ['Spevi pred evangelijem'] },
+  { id: 'vstop', t: 'Vstop', secs: ['Mašne pesmi (začetek maše)'], seas: 40, own: 20 },
+  { id: 'kyrie', t: 'Gospod, usmili se', secs: ['Maše'], f: /usmili|kyrie/i, ord: true },
+  { id: 'gloria', t: 'Slava', secs: ['Maše'], f: /slava|gloria/i, ord: true },
+  { id: 'psalm', t: 'Psalm', secs: ['Psalmi po berilu'], prop: 'psalm' },
+  { id: 'evang', t: 'Pred evangelijem', secs: ['Spevi pred evangelijem'], prop: 'evang' },
   { id: 'credo', t: 'Vera', secs: ['Maše', 'Vera, vzkliki, očenaš, odpevi'], f: /credo|vera/i, opt: true },
-  { id: 'dar', t: 'Darovanje', secs: ['Darovanjske pesmi'], seas: true },
-  { id: 'sanctus', t: 'Svet', secs: ['Maše'], f: /–\s*(svet|sanctus)/i },
+  { id: 'dar', t: 'Darovanje', secs: ['Darovanjske pesmi'], seas: 30, own: 26 },
+  { id: 'sanctus', t: 'Svet', secs: ['Maše'], f: /–\s*(svet|sanctus)/i, ord: true },
   { id: 'vzklik', t: 'Po povzdigovanju', secs: ['Vera, vzkliki, očenaš, odpevi'], f: /povzdig/i, opt: true },
   { id: 'ocenas', t: 'Očenaš', secs: ['Vera, vzkliki, očenaš, odpevi'], f: /oče naš|očenaš/i, opt: true },
-  { id: 'agnus', t: 'Jagnje božje', secs: ['Maše'], f: /jagnje|agnus/i },
-  { id: 'obh', t: 'Obhajilo', secs: ['Obhajilne pesmi'] },
-  { id: 'zahv', t: 'Po obhajilu', secs: ['Poobhajilne pesmi', 'Zahvalne pesmi'] },
-  { id: 'sklep', t: 'Sklep', secs: ['Marijine pesmi', 'Šmarnične pesmi', 'Latinske pesmi'], seas: true },
+  { id: 'agnus', t: 'Jagnje božje', secs: ['Maše'], f: /jagnje|agnus/i, ord: true },
+  { id: 'obh', t: 'Obhajilo', secs: ['Obhajilne pesmi'], seas: 14, own: 32, seasHigh: ['bozic', 'vnoc'] },
+  { id: 'zahv', t: 'Po obhajilu', secs: ['Poobhajilne pesmi', 'Zahvalne pesmi'], seas: 24, own: 22 },
+  { id: 'sklep', t: 'Sklep', secs: ['Marijine pesmi', 'Latinske pesmi'], seas: 24, own: 18 },
 ];
-const SEAS_WORD = { 'Adventni čas': /advent/i, 'Božični čas': /božič/i, 'Postni čas': /post/i, 'Cvetna nedelja': /post|veliki teden/i, 'Veliki teden': /veliki teden|post/i, 'Velikonočni čas': /velika noč/i, 'Kristus Kralj': /med letom/i, 'Čas med letom': /med letom/i, 'Sv. Rešnje telo': /rešnje telo/i, 'Šmarnice (maj)': /marijin/i, 'Srce Jezusovo': /med letom/i };
 const planDate = pl => pl.date ? new Date(pl.date + 'T12:00') : new Date();
 const usage = s => S.counts[s.key] || 0;
 const rankSongs = arr => arr.sort((a, b) => (isPop(b) - isPop(a)) * 2 + Math.sign(usage(b) - usage(a)) || a.nv - b.nv);
-function slotCandidates(slot, pl) {
-  const se = season(planDate(pl));
-  let base = S.songs.filter(s => inSecs(s, slot.secs) && (!slot.f || slot.f.test(s.title)));
-  const w = SEAS_WORD[se.name];
-  if (w && (slot.id === 'psalm' || slot.id === 'evang')) { const m = base.filter(s => w.test(s.title)); if (m.length) base = [...m, ...base.filter(s => !w.test(s.title))]; }
-  const seasonal = slot.seas && se.secs.length ? rankSongs(S.songs.filter(s => inSecs(s, se.secs))) : [];
-  return { se, seasonal, base: (slot.id === 'psalm' || slot.id === 'evang') ? base : rankSongs(base) };
+const slotSkip = (sl, L) => (sl.id === 'gloria' && !L.gloria);
+// koliko časa je minilo, odkar je bila pesem v drugem razporedu (v dneh)
+function lastUsed(key, pl) {
+  const t = planDate(pl); let best = Infinity;
+  for (const p of S.plans) { if (p === pl || !p.date) continue; if (Object.values(p.slots).some(a => a.includes(key))) best = Math.min(best, Math.abs(dDiff(new Date(p.date + 'T12:00'), t))); }
+  return best;
 }
-function nextSunday() { const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7)); return d.toISOString().slice(0, 10); }
+const NAMED_SAINT = /jožef|rednik|alojzij|hema|ana\b|terezij|cvetka|nikolaj|petrus|mučenik|junaka|angel božji|zadonite|opevajmo/i;
+// ocena pesmi za del maše na določen dan; vrne null, če pesem ta dan ne sodi
+function scoreSong(s, sl, L, pl) {
+  if (s.src === 'zbor' || !s.nv) return null;
+  const si = secOf(s); const sec = si >= 0 ? SECTIONS[si][1] : '';
+  const own = sl.secs.includes(sec) && (!sl.f || sl.f.test(s.title));
+  const seasonal = L.secs.includes(sec);
+  // pesmi drugega liturgičnega časa ne sodijo (božična v postu ipd.)
+  if (SEAS_SECS.includes(sec) && !seasonal && !own) return null;
+  if (sec === 'Božična osemdnevnica (17.–24. dec.)' && !L.secs.includes(sec)) return null;
+  const why = []; let sc = 0;
+  if (sl.prop) {
+    if (!own) return null;
+    if (L[sl.prop] && L[sl.prop].test(s.title)) { sc += 60; why.push('za ta dan'); }
+    else if (/med letom/.test(s.title) && L.s === 'medletom') { sc += 20; }
+    else return null;
+    if (sl.id === 'evang' && !L.alleluia && !/post/i.test(s.title)) return null;
+  } else if (sl.ord) {
+    if (!own) return null;
+  } else {
+    if (!own && !seasonal && !(sl.id === 'sklep' && (L.marian || inSecs(s, ['Marijine pesmi', 'Šmarnične pesmi']))) && !(sl.id === 'zahv' && sec === 'Zahvalne pesmi')) {
+      const generic = L.saints === 'all' && sec === 'Svetniške pesmi' && !NAMED_SAINT.test(s.title);
+      if (!generic && !(L.kw && L.kw.test(s.title) && ['Marijine pesmi', 'Svetniške pesmi', 'Latinske pesmi'].includes(sec))) return null;
+    }
+    if (seasonal) { sc += Math.round((sl.seasHigh && sl.seasHigh.includes(L.s) ? 34 : sl.seas) * (L.rank >= 3 && (L.kw || L.marian || L.saints) ? 0.5 : 1)); why.push(L.seasonName === 'Čas med letom' ? L.name : L.seasonName.toLowerCase()); }
+    if (own) sc += sl.own;
+    if (L.kw && L.kw.test(s.title)) { sc += 30; why.push('praznik'); }
+    if (L.saints && sec === 'Svetniške pesmi' && (L.saints !== 'all' || !NAMED_SAINT.test(s.title))) { sc += 22; why.push('svetniki'); }
+    if (L.marian && /Marijine|Šmarnične|Latinske/.test(sec) && ['vstop', 'dar', 'sklep'].includes(sl.id)) { sc += 26; why.push('Marijin praznik'); }
+    if (sl.id === 'sklep') { if (L.marianAnt.test(s.title)) { sc += L.s === 'vnoc' ? 32 : 18; why.push('antifona časa'); } if (L.s === 'bozic' && seasonal) sc += 12; if (!seasonal && !/Marijine|Šmarnične|Latinske/.test(sec)) sc -= 20; }
+    if (sl.id === 'zahv' && L.thanks && sec === 'Zahvalne pesmi') { sc += 40; why.push('zahvala'); }
+    if (L.dead && sec === 'Pogreb') { sc += 40; why.push('za rajne'); }
+    if (sl.id === 'obh' && /Obhajilne/.test(sec) && L.s === 'medletom') sc += 6;
+  }
+  if (isPop(s)) { sc += 12; why.push('znana'); }
+  const u = usage(s); if (u) { sc += Math.min(10, u * 2); why.push(u + '× izbrana'); }
+  if (notesFor(s)) sc += 3;
+  const lu = lastUsed(s.key, pl);
+  if (lu <= 14) { sc -= 28; why.push(`pred ${lu} dnevi`); } else if (lu <= 42) sc -= 12;
+  return { s, sc, why };
+}
+function ranked(sl, pl, L = litDay(planDate(pl))) {
+  const inPlan = new Set(Object.values(pl.slots).flat());
+  const out = [];
+  for (const s of S.songs) { if (inPlan.has(s.key)) continue; const r = scoreSong(s, sl, L, pl); if (r) out.push(r); }
+  return out.sort((a, b) => b.sc - a.sc || a.s.nv - b.s.nv);
+}
+// ordinarij: ista maša za Gospod usmili se, Slava, Svet, Jagnje; v istem času ostane ista
+function pickMass(pl, L, skip = []) {
+  const masses = [...new Set(S.songs.filter(s => inSecs(s, ['Maše'])).map(s => (s.title.match(/^Maša (\d+)/) || [])[1]).filter(Boolean))];
+  const prev = S.plans.filter(p => p !== pl && p.date && litDay(new Date(p.date + 'T12:00')).s === L.s && Math.abs(dDiff(new Date(p.date + 'T12:00'), planDate(pl))) < 60).sort((a, b) => b.date.localeCompare(a.date));
+  const massOf = p => { for (const id of ['kyrie', 'sanctus', 'agnus', 'gloria']) { const k = (p.slots[id] || [])[0]; const s = k && songByKey(k); const mm = s && s.title.match(/^Maša (\d+)/); if (mm) return mm[1]; } return null; };
+  const cont = prev.map(massOf).find(Boolean);
+  const score = mm => (mm === cont ? 100 : 0) + S.songs.filter(s => s.title.startsWith('Maša ' + mm + ' ')).reduce((a, s) => a + usage(s), 0) + (mm === '7' && L.rank >= 4 ? 8 : 0) - (mm === '7' && L.rank < 3 ? 4 : 0);
+  return masses.filter(mm => !skip.includes(mm)).sort((a, b) => score(b) - score(a) || a - b)[0];
+}
+function fillMass(pl, L, mm) {
+  for (const id of ['kyrie', 'gloria', 'sanctus', 'agnus']) {
+    const sl = SLOTS.find(x => x.id === id); if (slotSkip(sl, L)) { pl.slots[id] = []; continue; }
+    const s = S.songs.find(x => x.title.startsWith('Maša ' + mm + ' ') && sl.f.test(x.title));
+    pl.slots[id] = s ? [s.key] : [];
+  }
+}
+// iz najboljših nekaj izbere z rahlo naključnostjo, da »Predlagaj znova« da drug, a še vedno dober izbor
+function pickTop(list, vary) {
+  if (!list.length) return null; if (!vary) return list[0];
+  const top = list.filter(x => x.sc >= list[0].sc - 18).slice(0, 4); const w = top.map((x, i) => 1 / (i + 1)); let r = Math.random() * w.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < top.length; i++) { r -= w[i]; if (r <= 0) return top[i]; } return top[0];
+}
+function autofill(pl, all) {
+  const L = litDay(planDate(pl));
+  if (all) for (const sl of SLOTS) if (!sl.opt) pl.slots[sl.id] = [];
+  if (['kyrie', 'gloria', 'sanctus', 'agnus'].every(id => !(pl.slots[id] || []).length)) { const mm = pickMass(pl, L); if (mm) fillMass(pl, L, mm); }
+  let n = 0;
+  for (const sl of SLOTS) {
+    if (sl.opt || sl.ord || (pl.slots[sl.id] || []).length || slotSkip(sl, L)) continue;
+    const r = pickTop(ranked(sl, pl, L), all);
+    if (r) { pl.slots[sl.id] = [r.s.key]; n++; }
+  }
+  if (L.s === 'tridnevje' && /petek/.test(L.name)) { for (const id of ['kyrie', 'gloria', 'sanctus', 'agnus', 'evang']) pl.slots[id] = []; }
+  saveMeta(); render();
+  toast(`${L.name}: predlogi pripravljeni${!L.gloria ? ' · brez Slave' : ''}${!L.alleluia ? ' · brez aleluje' : ''}`);
+}
+// zamenjaj eno pesem z naslednjim najboljšim predlogom za ta del
+function swapPick(pl, sid, key) {
+  const sl = SLOTS.find(x => x.id === sid), L = litDay(planDate(pl));
+  pl.rej = pl.rej || {}; const rej = pl.rej[sid] = [...new Set([...(pl.rej[sid] || []), key])].slice(-30);
+  if (sl.ord) {
+    const cur = (songByKey(key)?.title.match(/^Maša (\d+)/) || [])[1];
+    const tried = [...new Set([...(pl.rejMass || []), cur])]; pl.rejMass = tried;
+    let mm = pickMass(pl, L, tried); if (!mm) { pl.rejMass = [cur]; mm = pickMass(pl, L, [cur]); }
+    if (mm) { fillMass(pl, L, mm); saveMeta(); render(); toast(`Ordinarij zamenjan: Maša ${mm}`); }
+    return;
+  }
+  let list = ranked(sl, pl, L).filter(r => !rej.includes(r.s.key));
+  if (!list.length) { pl.rej[sid] = [key]; list = ranked(sl, pl, L).filter(r => r.s.key !== key); }
+  if (!list.length) { toast('Ni drugega predloga · izberi ročno'); return; }
+  const arr = pl.slots[sid]; arr[arr.indexOf(key)] = list[0].s.key; saveMeta(); render();
+}
+function nextSunday() { const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7)); return dayIso(d); }
 const fmtDate = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${+d}. ${+m}. ${y}`; };
 const curPlan = () => S.plans.find(p => p.id === S.planId) || null;
 const planSeq = pl => SLOTS.flatMap(sl => (pl.slots[sl.id] || []).map(k => ({ slot: sl, key: k }))).filter(x => songByKey(x.key));
@@ -1268,36 +1428,39 @@ function massHtml() {
   const pl = curPlan();
   if (pl) return planHtml(pl);
   let h = `<div class="section-head"><h2>Razporedi za mašo${S.plans.length ? `<em>${S.plans.length}</em>` : ''}</h2><button class="btn primary" data-newplan>${ICON_PLUS}Nov razpored</button></div>`;
-  if (!S.plans.length) return h + `<div class="empty"><strong>Še ni razporeda</strong>Ustvari razpored, izberi pesmi za vsak del maše (vstop, darovanje, obhajilo …) in jih med mašo odpiraš po vrsti z gumbom »Naslednja«.</div>`;
+  if (!S.plans.length) return h + `<div class="empty"><strong>Še ni razporeda</strong>Izberi datum in aplikacija sama predlaga pesmi za vsak del maše po liturgičnem dnevu (advent, post, praznik …). Vsako lahko potem zamenjaš ali izbereš ročno.</div>`;
   h += '<div class="plans">';
   for (const p of [...S.plans].sort((a, b) => (b.date || '').localeCompare(a.date || ''))) {
-    const n = planSeq(p).length;
-    h += `<div class="plan-card"><div class="pi"><b>${esc(p.name || 'Maša')}</b><span>${fmtDate(p.date)}${p.date ? ' · ' : ''}${n} ${n === 1 ? 'pesem' : n === 2 ? 'pesmi' : n < 5 ? 'pesmi' : 'pesmi'}</span></div>
+    const n = planSeq(p).length; const L = p.date ? litDay(new Date(p.date + 'T12:00')) : null;
+    h += `<div class="plan-card"><div class="pi"><b>${esc(p.name || 'Maša')}</b><span>${fmtDate(p.date)}${L ? ' · ' + esc(L.name) : ''} · ${n} ${n === 1 ? 'pesem' : 'pesmi'}</span></div>
       <button class="btn" data-editplan="${p.id}">Uredi</button><button class="btn primary" data-playplan="${p.id}" ${n ? '' : 'disabled'}>Začni ▸</button></div>`;
   }
   return h + '</div>';
 }
 function planHtml(pl) {
-  const se = season(planDate(pl));
+  const L = litDay(planDate(pl));
   const n = planSeq(pl).length;
+  const notes = [!L.gloria ? 'Slava se ne poje' : '', !L.alleluia ? 'aleluja se ne poje' : ''].filter(Boolean).join(' · ');
   let h = `<button class="linkback" data-planback>‹ Vsi razporedi</button>
   <div class="plan-head"><div class="fields"><input type="text" data-plname value="${esc(pl.name)}" aria-label="Ime razporeda" placeholder="Ime, npr. Nedeljska maša"><input type="date" data-pldate value="${esc(pl.date || '')}" aria-label="Datum maše"></div>
-  <div class="plan-season">Liturgični čas: <b>${esc(se.name)}</b>${se.secs.length ? ' · predlogi za vstop, darovanje in sklep upoštevajo ta čas' : ''}</div>
-  <div class="plan-actions"><button class="btn primary" data-playplan="${pl.id}" ${n ? '' : 'disabled'}>Začni mašo ▸</button><button class="btn" data-autofill>Predlagaj prazne dele</button><button class="btn" data-planpdf ${n ? '' : 'disabled'}>Izvozi PDF</button><button class="btn danger" data-delplan="${pl.id}">Izbriši</button></div></div>
+  <div class="plan-season"><b>${esc(L.name)}</b> · ${esc(L.seasonName.toLowerCase())} · leto ${L.cyc}${notes ? ` · <span style="color:var(--ink)">${notes}</span>` : ''}</div>
+  <div class="plan-actions"><button class="btn primary" data-playplan="${pl.id}" ${n ? '' : 'disabled'}>Začni mašo ▸</button><button class="btn" data-autofill>${n ? 'Predlagaj prazne' : 'Predlagaj vse'}</button>${n ? '<button class="btn" data-refill>Predlagaj vse znova</button>' : ''}<button class="btn" data-planpdf ${n ? '' : 'disabled'}>Izvozi PDF</button><button class="btn danger" data-delplan="${pl.id}">Izbriši</button></div></div>
   <ol class="slots">`;
   let idx = 0;
   for (const sl of SLOTS) {
     const keys = (pl.slots[sl.id] || []).filter(k => songByKey(k));
-    h += `<li class="slotrow"><h4>${esc(sl.t)}</h4><div class="picks">`;
-    for (const k of keys) { const s = songByKey(k); h += `<div class="pick"><button data-playat="${idx++}" aria-label="Odpri ${esc(s.title)}"><span class="n">${numLabel(s.num) || '·'}</span><span class="t">${esc(s.title)}</span></button><button class="x" data-unpick="${sl.id}|${esc(k)}" aria-label="Odstrani">×</button></div>`; }
-    h += `<button class="addpick" data-pickslot="${sl.id}">+ ${keys.length ? 'Dodaj še' : 'Izberi pesem'}</button></div></li>`;
+    const off = slotSkip(sl, L);
+    h += `<li class="slotrow${off && !keys.length ? ' off' : ''}"><h4>${esc(sl.t)}${sl.opt ? ' <small>neobvezno</small>' : ''}</h4><div class="picks">`;
+    for (const k of keys) { const s = songByKey(k); h += `<div class="pick"><button data-playat="${idx++}" aria-label="Odpri ${esc(s.title)}"><span class="n">${numLabel(s.num) || '·'}</span><span class="t">${esc(s.title)}</span></button><button class="x" data-swap="${sl.id}|${esc(k)}" aria-label="Zamenjaj z drugim predlogom" title="Drug predlog">↻</button><button class="x" data-unpick="${sl.id}|${esc(k)}" aria-label="Odstrani">×</button></div>`; }
+    h += off && !keys.length ? `<span class="slotnote">Ta dan se ne poje</span>` : `<button class="addpick" data-pickslot="${sl.id}">+ ${keys.length ? 'Dodaj še' : 'Izberi pesem'}</button>`;
+    h += `</div></li>`;
   }
   return h + '</ol>';
 }
 function newPlan() {
   const d = nextSunday();
   const pl = { id: 'p' + Date.now().toString(36), name: 'Maša ' + fmtDate(d), date: d, slots: {} };
-  S.plans.push(pl); S.planId = pl.id; saveMeta(); render(); $('#scroll').scrollTop = 0;
+  S.plans.push(pl); S.planId = pl.id; autofill(pl); $('#scroll').scrollTop = 0;
 }
 function addToSlot(pl, slotId, key) {
   const arr = pl.slots[slotId] = pl.slots[slotId] || [];
@@ -1305,45 +1468,17 @@ function addToSlot(pl, slotId, key) {
   S.counts[key] = (S.counts[key] || 0) + 1;
   saveMeta();
 }
-function autofill(pl) {
-  const se = season(planDate(pl));
-  const used = new Set(Object.values(pl.slots).flat());
-  // ordinarij iz iste maše
-  const ord = ['kyrie', 'gloria', 'sanctus', 'agnus'];
-  if (ord.every(id => !(pl.slots[id] || []).length)) {
-    const masses = [...new Set(S.songs.filter(s => inSecs(s, ['Maše'])).map(s => (s.title.match(/^Maša (\d+)/) || [])[1]).filter(Boolean))];
-    const score = m => S.songs.filter(s => s.title.startsWith('Maša ' + m + ' ')).reduce((a, s) => a + usage(s), 0);
-    masses.sort((a, b) => score(b) - score(a) || a - b);
-    const m = masses[0];
-    if (m) for (const id of ord) {
-      const sl = SLOTS.find(x => x.id === id);
-      if (sl.noIn && sl.noIn.includes(se.name)) continue;
-      const s = S.songs.find(x => x.title.startsWith('Maša ' + m + ' ') && sl.f.test(x.title));
-      if (s) { pl.slots[id] = [s.key]; used.add(s.key); }
-    }
-  }
-  for (const sl of SLOTS) {
-    if (sl.opt || (pl.slots[sl.id] || []).length || ord.includes(sl.id)) continue;
-    if (sl.id === 'psalm') continue; // psalm je vezan na berila dneva
-    if (sl.noIn && sl.noIn.includes(se.name)) continue;
-    const { seasonal, base } = slotCandidates(sl, pl);
-    const pool = [...(sl.id === 'vstop' || sl.id === 'sklep' ? seasonal : []), ...base, ...(sl.id === 'dar' ? seasonal : [])];
-    const s = pool.find(x => !used.has(x.key) && songDoc(x) !== undefined);
-    if (s) { pl.slots[sl.id] = [s.key]; used.add(s.key); }
-  }
-  saveMeta(); render();
-  toast('Prazni deli so zapolnjeni. Psalm izberi po berilih dneva.');
-}
-function openPicker(pl, slotId) {
-  const sl = SLOTS.find(x => x.id === slotId);
-  const { se, seasonal, base } = slotCandidates(sl, pl);
+function openPicker(pl, slotId, replace) {
+  const sl = SLOTS.find(x => x.id === slotId); const L = litDay(planDate(pl));
+  const sug = ranked(sl, pl, L).slice(0, 12);
   const used = new Set(pl.slots[slotId] || []);
-  const item = s => `<button data-pk="${esc(s.key)}"><span class="n">${numLabel(s.num) || '·'}</span><span class="t">${esc(s.title)}${isPop(s) ? '<em class="pop">znana</em>' : ''}</span><span class="c">${usage(s) ? usage(s) + '×' : ''}</span></button>`;
+  const all = rankSongs(S.songs.filter(s => inSecs(s, sl.secs) && (!sl.f || sl.f.test(s.title)) && !used.has(s.key))).sort((a, b) => a.nv - b.nv);
+  const item = (s, why) => `<button data-pk="${esc(s.key)}"><span class="n">${numLabel(s.num) || '·'}</span><span class="t">${esc(s.title)}${why ? `<em class="pop">${esc(why)}</em>` : isPop(s) ? '<em class="pop">znana</em>' : ''}</span><span class="c">${usage(s) ? usage(s) + '×' : ''}</span></button>`;
   const listFor = q => {
-    if (q) { const r = search(q).slice(0, 60); return r.length ? `<h5>Zadetki</h5>${r.map(item).join('')}` : '<p>Ni zadetkov.</p>'; }
+    if (q) { const r = search(q).slice(0, 60); return r.length ? `<h5>Zadetki</h5>${r.map(s => item(s)).join('')}` : '<p>Ni zadetkov.</p>'; }
     let h = '';
-    if (seasonal.length) h += `<h5>${esc(se.name)}</h5>${seasonal.filter(s => !used.has(s.key)).map(item).join('')}`;
-    h += `<h5>${esc(sl.t)}</h5>${base.filter(s => !used.has(s.key)).map(item).join('')}`;
+    if (sug.length) h += `<h5>Predlogi za ${esc(L.name)}</h5>${sug.map(r => item(r.s, r.why.slice(0, 2).join(' · '))).join('')}`;
+    h += `<h5>Vse za ${esc(sl.t.toLowerCase())}</h5>${all.map(s => item(s)).join('')}`;
     return h;
   };
   modal(`<div class="picker" style="display:flex;flex-direction:column;gap:12px"><h3>${esc(sl.t)}</h3><input type="search" placeholder="Išči vse pesmi: številka ali naslov" aria-label="Išči pesem"><div class="plist">${listFor('')}</div><div class="actions"><button class="btn" data-close>Zapri</button></div></div>`, (m, close) => {
@@ -2229,6 +2364,8 @@ content.addEventListener('click', e => {
   if (b.dataset.pickslot) { const pl = curPlan(); if (pl) openPicker(pl, b.dataset.pickslot); return; }
   if (b.dataset.unpick) { const pl = curPlan(); const [sid, k] = b.dataset.unpick.split('|'); if (pl) { pl.slots[sid] = (pl.slots[sid] || []).filter(x => x !== k); saveMeta(); render(); } return; }
   if (b.hasAttribute('data-autofill')) { const pl = curPlan(); if (pl) autofill(pl); return; }
+  if (b.hasAttribute('data-refill')) { const pl = curPlan(); if (pl) autofill(pl, true); return; }
+  if (b.dataset.swap) { const pl = curPlan(); const [sid, k] = b.dataset.swap.split('|'); if (pl) swapPick(pl, sid, k); return; }
   if (b.hasAttribute('data-planpdf')) { const pl = curPlan(); if (pl) exportSongs(planSeq(pl).map(x => songByKey(x.key)), safeName(pl.name || 'Maša') + '.pdf'); return; }
   if (b.dataset.delplan) {
     if (!armed.get(b)) { armed.set(b, 1); b.classList.add('armed'); b.textContent = 'Res izbriši?'; setTimeout(() => { if (b.isConnected) { armed.delete(b); b.classList.remove('armed'); b.textContent = 'Izbriši'; } }, 3500); return; }
