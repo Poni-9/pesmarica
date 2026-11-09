@@ -1536,13 +1536,15 @@ function parseMusicXml(text) {
     const order = []; let repStart = 0; const passed = new Set(); let i = 0, guard = 0;
     while (i < measures.length && guard++ < 4000) {
       const bars = [...measures[i].children].filter(c => c.nodeName === 'barline');
-      const rep = d => bars.some(x => kid(x, 'repeat')?.getAttribute('direction') === d);
+      const rep = d => bars.some(x => kid(x, 'repeat')?.getAttribute('direction') === d && (d !== 'forward' || x.getAttribute('location') !== 'right'));
+      const fwdAfter = bars.some(x => kid(x, 'repeat')?.getAttribute('direction') === 'forward' && x.getAttribute('location') === 'right');
       if (rep('forward') && !passed.has(i)) repStart = i;
       const en = bars.map(x => kid(x, 'ending')).find(Boolean);
       const pass = passed.has(repStart) ? '2' : '1';
       if (en && !(en.getAttribute('number') || '1').split(/[ ,]+/).includes(pass)) { i++; continue; }
       order.push(i);
-      if (rep('backward') && !passed.has(repStart)) { passed.add(repStart); i = repStart; continue; }
+      if (rep('backward')) { if (!passed.has(repStart)) { passed.add(repStart); i = repStart; continue; } repStart = i + 1; }
+      if (fwdAfter) repStart = i + 1;
       i++;
     }
     let divisions = 1, pos = 0; const ties = new Map();
@@ -1976,8 +1978,8 @@ async function zPoll() {
   await zSync();
   let changed = false;
   for (const d of zborDocs()) {
-    if (S.notes['z:' + d.id]) continue;
     const st = (d.omr || {}).state;
+    if (S.notes['z:' + d.id] && st !== 'wait') continue;
     if (st === 'none' || !st) { await zUpload(d); continue; }
     if (st !== 'wait') continue;
     try {
@@ -1990,8 +1992,8 @@ async function zPoll() {
         const t = await (await gh(`contents/out/${d.id}/${i}.musicxml`, { raw: true })).text();
         try { const p = parseMusicXml(t); if (!data) data = p; else { const off = data.len; data.ev.push(...p.ev.map(e => [e[0] + off, e[1], e[2], e[3]])); data.len += p.len; data.voices = Math.max(data.voices, p.voices); } } catch {}
       }
-      if (data) { data.src = 'omr'; data.inst = 'piano'; S.notes['z:' + d.id] = data; d.omr = { state: 'done' }; toast(`Note pripravljene: ${d.name}`); }
-      else d.omr = { state: 'err' };
+      if (data) { data.src = 'omr'; data.inst = 'piano'; S.notes['z:' + d.id] = data; if (!(d.omr || {}).re) toast(`Note pripravljene: ${d.name}`); d.omr = { state: 'done' }; }
+      else if (!S.notes['z:' + d.id]) d.omr = { state: 'err' };
       await saveDoc(d); changed = true;
     } catch {}
   }
@@ -2782,6 +2784,7 @@ async function boot() {
     if (!S.settings.secDef1) { S.sort = 'sec'; S.settings.secDef1 = 1; }
   }
   if (location.hash === '#beri') location.hash = '';
+  if (!S.settings.zRep1) { for (const d of S.docs.filter(d => d.zbor && S.notes['z:' + d.id] && (d.omr || {}).state === 'done')) { d.omr = { state: 'wait', re: 1 }; saveDoc(d); } S.settings.zRep1 = 1; saveMeta(); }
   buildSongs(); render(); unlockNotes(); setTimeout(zPoll, 1500);
   try { navigator.storage?.persist?.().catch(() => {}); } catch {}
   if (!window.pdfjsLib) toast('Pregledovalnik PDF se ni naložil. Preveri povezavo in osveži stran.');
