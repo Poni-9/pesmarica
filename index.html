@@ -1934,7 +1934,8 @@ async function zSave(pages, title, comp) {
 const ghCfg = () => S.settings.gh || {};
 async function gh(path, opt = {}) {
   const c = ghCfg();
-  return fetch(`https://api.github.com/repos/${c.repo}/${path}`, { method: opt.method || 'GET', body: opt.body, headers: { Authorization: `Bearer ${c.token}`, Accept: opt.raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' } });
+  const url = `https://api.github.com/repos/${(c.repo || '').trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/+$/, '')}` + (path ? '/' + path : '');
+  return fetch(url, { method: opt.method || 'GET', body: opt.body, headers: { Authorization: `Bearer ${c.token}`, Accept: opt.raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' } });
 }
 const blobB64 = blob => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
 async function zUpload(d) {
@@ -1988,10 +1989,10 @@ function zSetup() {
       if (b.hasAttribute('data-x')) { close(); return; }
       if (b.hasAttribute('data-rm')) { S.settings.gh = {}; saveMeta(); close(); render(); return; }
       if (b.hasAttribute('data-ok')) {
-        S.settings.gh = { repo: m.querySelector('[data-repo]').value.trim(), token: m.querySelector('[data-tok]').value.trim() }; saveMeta();
+        S.settings.gh = { repo: m.querySelector('[data-repo]').value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/+$/, ''), token: m.querySelector('[data-tok]').value.replace(/[^\x21-\x7E]/g, '') }; saveMeta();
         const st = m.querySelector('[data-st]'); st.textContent = 'Preizkušam …';
         try { const r = await gh(''); st.textContent = r.ok ? '✓ Povezava deluje.' : r.status === 404 ? 'Repozitorija ni ali ključ nima dostopa do njega.' : r.status === 401 ? 'Ključ ni veljaven.' : 'Napaka ' + r.status; if (r.ok) { setTimeout(() => { close(); render(); zPoll(); }, 700); } }
-        catch { st.textContent = 'Ni povezave z internetom.'; }
+        catch (err) { st.textContent = navigator.onLine ? 'Povezava ni uspela: ' + (err && err.message || err) : 'Ni povezave z internetom.'; }
       }
     });
   });
