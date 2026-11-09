@@ -2994,12 +2994,23 @@ async function boot() {
   }
   if (location.hash === '#beri') location.hash = '';
   if (!S.settings.zRep1) { for (const d of S.docs.filter(d => d.zbor && S.notes['z:' + d.id] && (d.omr || {}).state === 'done')) { d.omr = { state: 'wait', re: 1 }; saveDoc(d); } S.settings.zRep1 = 1; saveMeta(); }
-  buildSongs(); render(); unlockNotes(); setTimeout(zPoll, 1500);
+  try { buildSongs(); render(); }
+  catch (e) { if (S.tab !== 'all' || S.planId) { S.tab = 'all'; S.planId = null; try { render(); } catch (e2) { bootFail(e2); } } else bootFail(e); }
+  unlockNotes(); setTimeout(zPoll, 1500);
   try { navigator.storage?.persist?.().catch(() => {}); } catch {}
   if (!window.pdfjsLib) toast('Pregledovalnik PDF se ni naložil. Preveri povezavo in osveži stran.');
 }
 window.pesmarica = { addFiles };
-boot();
+// če se ob zagonu kaj zalomi, pokaži napako in izhod v sili namesto praznega zaslona
+function bootFail(e) {
+  console.error(e);
+  const el = document.getElementById('content'); if (!el) return;
+  const msg = String((e && (e.stack || e.message)) || e).split('\n').slice(0, 3).join('\n');
+  el.innerHTML = `<div class="notice" style="margin-top:20px"><p><b>Aplikacija se ni pravilno zagnala.</b> Tvoje pesmi, zapiski in razporedi so še shranjeni. Pošlji posnetek tega zaslona.</p><pre style="white-space:pre-wrap;font-size:12px;opacity:.8">${msg.replace(/[<&]/g, c => c === '<' ? '&lt;' : '&amp;')}</pre><button class="btn primary" onclick="location.reload()">Poskusi znova</button> <button class="btn" id="bf-reset">Osveži aplikacijo</button></div>`;
+  document.getElementById('bf-reset').onclick = async () => { try { for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); for (const k of await caches.keys()) await caches.delete(k); } catch {} location.reload(); };
+}
+window.addEventListener('error', e => { if (!document.querySelector('#content')?.children.length) bootFail(e.error || e.message); });
+boot().catch(bootFail);
 })();
 </script>
 
