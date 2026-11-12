@@ -94,11 +94,11 @@ for (const score of manifest.scores) assert(valid(JSON.parse(asset(score.playbac
    console.log('Checking favorites and search');const first=manifest.scores[0];await page.click(`[data-fav="p:${first.id}"]`);await page.click('#tab-fav');assert.equal(await page.locator('.piano-row').count(),1);
    await page.fill('#q',first.title);await page.waitForTimeout(150);assert.equal(await page.locator('.piano-row').count(),1);
    await page.click('#qclear');await page.click('#tab-piano');await page.fill('#q','no such piano score');await page.waitForTimeout(150);assert.equal(await page.locator('.piano-row').count(),0);await page.click('#qclear');
-   console.log('Checking phone layout');await page.setViewportSize({width:393,height:852});await page.screenshot({path:process.env.PIANO_SCREENSHOT||'/tmp/piano-mobile.png',fullPage:true});
+   console.log('Checking phone layout');await page.setViewportSize({width:393,height:852});await page.click('#tab-piano');await page.screenshot({path:process.env.PIANO_SCREENSHOT||'/tmp/piano-mobile.png',fullPage:true});
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    await page.click(`[data-pianoplay="p:${first.id}"]`);await page.click('#pl-play');
    for(const selector of ['#pl-piano-modes','[data-voice="0"]','[data-voice="2"]']){const box=await page.locator(selector).boundingBox();assert(box.x>=0 && box.x+box.width<=394 && box.y+box.height<=852,selector+' mobile bounds');}
-   await page.screenshot({path:'/tmp/piano-player-mobile.png'});await page.click('#r-back');
+   const bounds=await page.locator('#playerbar .vb:visible').evaluateAll(bs=>bs.map(b=>{const r=b.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height,overflow:b.scrollWidth>b.clientWidth+1};}));for(let i=0;i<bounds.length;i++){assert(!bounds[i].overflow,'voice label fits');for(let j=i+1;j<bounds.length;j++){const a=bounds[i],b=bounds[j];assert(a.x+a.w<=b.x+1||b.x+b.w<=a.x+1||a.y+a.h<=b.y+1||b.y+b.h<=a.y+1,'voice buttons do not overlap');}}assert(!/^-/.test(await page.locator('#pl-time').innerText()),'initial clock is nonnegative');await page.screenshot({path:'/tmp/piano-player-mobile.png'});await page.click('#r-back');
    await page.evaluate(()=>navigator.serviceWorker.ready);await page.waitForFunction(()=>!!navigator.serviceWorker.controller);
    console.log('Checking offline restart');await context.setOffline(true);await page.reload();await page.click('#tab-piano');assert.equal(await page.locator('.piano-row').count(),7);
    await page.click(`[data-pianoplay="p:${first.id}"]`);await page.waitForFunction(()=>document.querySelectorAll('.pv canvas:not(.ink)').length>0);assert.equal(await page.locator('#pl-play').getAttribute('aria-label'),'Ustavi');
