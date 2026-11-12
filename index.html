@@ -160,6 +160,8 @@ button { cursor: pointer; }
 .playerbar .pl-play { width: 54px; height: 54px; border-radius: 50%; border: 0; background: var(--glass-gold); color: #1b1608; display: grid; place-items: center; flex: none; }
 .playerbar .pl-play svg { width: 26px; height: 26px; }
 .playerbar input[type=range] { flex: 1; min-width: 80px; accent-color: var(--glass-gold); height: 30px; }
+.piano-row .piano-info { font-size: 12px; line-height: 1.4; opacity: .85; white-space: normal; }
+.playerbar #pl-piano-modes, .playerbar [aria-label="Glasovi"] { flex-wrap: wrap; }
 .playerbar .pl-time { font-variant-numeric: tabular-nums; font-size: 13px; opacity: .75; white-space: nowrap; }
 .playerbar .grp { display: inline-flex; align-items: center; gap: 2px; border: 1px solid rgba(255,255,255,.14); border-radius: 12px; padding: 2px; }
 .playerbar .grp > span { min-width: 64px; text-align: center; font-size: 13px; line-height: 1.15; }
@@ -331,6 +333,7 @@ button { cursor: pointer; }
         <button class="tab" role="tab" id="tab-fav" data-tab="fav" aria-selected="false">Priljubljene <span class="cnt" id="cnt-fav"></span></button>
         <button class="tab" role="tab" id="tab-mass" data-tab="mass" aria-selected="false">Maša</button>
         <button class="tab" role="tab" id="tab-zbor" data-tab="zbor" aria-selected="false">Zbor</button>
+        <button class="tab" role="tab" id="tab-piano" data-tab="piano" aria-selected="false">Klavir <span class="cnt" id="cnt-piano"></span></button>
         <button class="tab" role="tab" id="tab-books" data-tab="books" aria-selected="false">Knjige in nastavitve</button>
       </div>
     </div>
@@ -370,6 +373,7 @@ button { cursor: pointer; }
     <div class="pl-row pl-ctrl pl-has">
       <div class="grp"><button class="sb" data-bpm="-4" aria-label="Počasneje">−</button><span>tempo<b id="pl-bpm"></b></span><button class="sb" data-bpm="4" aria-label="Hitreje">+</button></div>
       <div class="grp"><button class="sb" data-tr="-1" aria-label="Nižje za pol tona">−</button><span>tonovsko<b id="pl-tr">0</b></span><button class="sb" data-tr="1" aria-label="Višje za pol tona">+</button></div>
+      <div class="grp" id="pl-piano-modes" hidden aria-label="Način vaje"><button class="vb" data-pianomode="melody">Samo melodija</button><button class="vb" data-pianomode="all">Vse</button></div>
       <div class="grp" aria-label="Glasovi"><button class="vb" data-voice="0">S</button><button class="vb" data-voice="1">A</button><button class="vb" data-voice="2">T</button><button class="vb" data-voice="3">B</button></div>
       <button class="sb" id="pl-loop" aria-label="Ponavljaj" aria-pressed="false">⟳</button>
       <button class="sb" id="pl-follow" aria-label="Ob listanju samodejno zaigraj naslednjo pesem" title="Ob listanju samodejno zaigraj pesem na novi strani" aria-pressed="true">⇥</button>
@@ -398,6 +402,7 @@ button { cursor: pointer; }
 <div id="modal-root"></div>
 
 <script src="pdf.min.js"></script>
+<script src="piano.js"></script>
 <script>
 (() => {
 'use strict';
@@ -959,6 +964,14 @@ const DB = (() => {
     });
   };
   return {
+    batch: async writes => {
+      const db = await open();
+      return new Promise((res, rej) => {
+        const t = db.transaction([...new Set(writes.map(w => w.store))], 'readwrite');
+        t.oncomplete = () => res(); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+        for (const w of writes) t.objectStore(w.store).put(w.value, w.key);
+      });
+    },
     get: (s, k) => run(s, 'readonly', st => st.get(k)),
     put: (s, k, v) => run(s, 'readwrite', st => st.put(v, k)),
     del: (s, k) => run(s, 'readwrite', st => st.delete(k)),
@@ -995,7 +1008,11 @@ function buildSongs() {
   const list = [];
   for (const [num, title, comp, book, page, y] of CATALOG) list.push({ key: 'c:' + num, num, title, comp, book, page, y: y || 0, src: 'cat' });
   for (const d of S.docs.filter(d => d.zbor)) list.push({ key: 'z:' + d.id, num: '', title: d.name, comp: d.comp || '', docId: d.id, book: null, page: 1, y: 0, src: 'zbor' });
-  for (const d of S.docs.filter(d => !d.zbor)) for (const s of d.songs || []) {
+  for (const d of pianoDocs()) {
+    list.push({ key: 'p:' + d.id, num: '', title: d.name, comp: d.comp || '', docId: d.id, book: null, page: 1, y: 0, src: 'piano' });
+    if (validPianoData(d.playback)) S.notes['p:' + d.id] = d.playback;
+  }
+  for (const d of S.docs.filter(d => !d.zbor && !d.piano)) for (const s of d.songs || []) {
     list.push({ key: 'm:' + d.id + ':' + s.page + ':' + norm(s.title).slice(0, 24), num: '', title: s.title, comp: s.src === 'auto' ? 'najdeno v PDF' : 'dodano ročno', docId: d.id, book: d.book, page: s.page, y: 0, src: s.src });
   }
   for (const s of list) { s.n = norm(s.title); s.cn = norm(s.comp); s.nv = parseInt(s.num, 10) || 0; }
@@ -1014,7 +1031,7 @@ function search(q) {
   const isNum = /^\d+$/.test(nq);
   const res = [];
   for (const s of S.songs) {
-    if (s.src === 'zbor') continue;
+    if (s.src === 'zbor' || isPiano(s)) continue;
     let score = -1;
     if (isNum && s.num) {
       const [a, b] = s.num.split('-').map(Number); const v = +nq;
@@ -1130,6 +1147,7 @@ function locLabel(s) {
 }
 function rowHtml(s) {
   const fav = S.favs.has(s.key);
+  if (isPiano(s)) return pianoRow(s);
   return `<li class="row"><button class="row-main" data-open="${esc(s.key)}">
     <span class="num${s.num.includes('-') ? ' range' : ''}">${numLabel(s.num)}</span>
     <span class="tt"><b>${esc(s.title)}${isPop(s) ? '<em class="pop">znana</em>' : ''}${S.notes[s.num || s.key] ? '<em class="pop" title="Ima note za predvajanje">♪</em>' : ''}</b>${s.comp ? `<span>${esc(s.comp)}</span>` : ''}</span>
@@ -1178,7 +1196,7 @@ const secOf = s => { const v = s.nv; if (!v) return -1; return SECTIONS.findInde
 const ICON_CHEV = '<svg class="sec-c" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 function sectionsHtml() {
   const groups = SECTIONS.map(() => []), other = [];
-  for (const s of S.songs) { if (s.src === 'zbor') continue; const i = secOf(s); (i < 0 ? other : groups[i]).push(s); }
+  for (const s of S.songs) { if (s.src === 'zbor' || isPiano(s)) continue; const i = secOf(s); (i < 0 ? other : groups[i]).push(s); }
   const byNum = (a, b) => a.nv - b.nv || coll.compare(a.title, b.title);
   const block = (key, title, items) => {
     items.sort(byNum);
@@ -1312,7 +1330,7 @@ function lastUsed(key, pl) {
 const NAMED_SAINT = /jožef|rednik|alojzij|hema|ana\b|terezij|cvetka|nikolaj|petrus|mučenik|junaka|angel božji|zadonite|opevajmo/i;
 // ocena pesmi za del maše na določen dan; vrne null, če pesem ta dan ne sodi
 function scoreSong(s, sl, L, pl) {
-  if (s.src === 'zbor' || !s.nv) return null;
+  if (s.src === 'zbor' || isPiano(s) || !s.nv) return null;
   const si = secOf(s); const sec = si >= 0 ? SECTIONS[si][1] : '';
   const own = sl.secs.includes(sec) && (!sl.f || sl.f.test(s.title));
   const seasonal = L.secs.includes(sec);
@@ -1416,7 +1434,7 @@ function popularHtml() {
   const se = season(new Date());
   const pops = S.songs.filter(isPop);
   const seas = se.secs.length ? pops.filter(s => inSecs(s, se.secs)) : [];
-  const mine = S.songs.filter(s => s.src !== 'zbor' && usage(s) >= 2).sort((a, b) => usage(b) - usage(a)).slice(0, 10);
+  const mine = S.songs.filter(s => s.src !== 'zbor' && !isPiano(s) && usage(s) >= 2).sort((a, b) => usage(b) - usage(a)).slice(0, 10);
   const pick = [...seas, ...pops.filter(s => !seas.includes(s))].slice(0, 14);
   const card = (s, extra) => `<button data-open="${esc(s.key)}"><span class="n">${numLabel(s.num) || '·'}</span><span class="t">${esc(s.title)}</span><span class="pc">${extra}</span></button>`;
   let h = '';
@@ -1531,7 +1549,7 @@ function songRange(s) {
   const ck = S.songs.length + '|' + S.docs.length;
   if (rangeCache.k !== ck) rangeCache = { k: ck, m: new Map() };
   if (rangeCache.m.has(s.key)) return rangeCache.m.get(s.key);
-  if (d.zbor) { const r = { doc: d, from: 1, to: d.pages || 1 }; rangeCache.m.set(s.key, r); return r; }
+  if (d.zbor || d.piano) { const r = { doc: d, from: 1, to: d.pages || 1 }; rangeCache.m.set(s.key, r); return r; }
   const list = songsOf(d); const i = list.indexOf(s);
   let end = s.page;
   for (let j = i + 1; j < list.length; j++) {
@@ -1746,14 +1764,16 @@ function audio() {
 }
 const plBpm = () => (S.settings.tempo || {})[PL.song?.key] || PL.data?.bpm || 72;
 const plTr = () => S.settings.transpose || 0;
-const voiceOn = v => !(S.settings.mute || []).includes(v);
+const voicePrefs = () => isPiano(PL.song) ? (S.settings.pianoPlayer ||= {}) : S.settings;
+const voiceOn = v => !(voicePrefs().mute || []).includes(v);
+const voiceName = v => PL.data?.voiceNames?.[v] || VOICE_NAMES[v];
 const beatSec = () => 60 / plBpm();
 function curPos() { return PL.playing ? PL.p0 + (PL.ctx.currentTime - PL.t0) / beatSec() : PL.pos; }
 function playNote(midi, when, dur, v) {
   const ctx = PL.ctx; const f = 440 * Math.pow(2, (midi + plTr() - 69) / 12);
   const piano = PL.data && PL.data.inst === 'piano';
   const o = ctx.createOscillator(); o.setPeriodicWave(piano ? PL.piano : PL.wave); o.frequency.value = f;
-  const g = ctx.createGain(); const solo = S.settings.solo;
+  const g = ctx.createGain(); const solo = voicePrefs().solo;
   const vol = (solo != null ? (v === solo ? 0.34 : 0.1) : (v === 0 ? 0.26 : 0.19)) / Math.max(1, (PL.data.voices || 4) / 3);
   const end = when + Math.max(0.06, dur - 0.025);
   if (piano) { // klavir: hiter udarec, nato pojemanje
@@ -1797,7 +1817,7 @@ function plRestartIfPlaying() { if (PL.playing) plSeek(curPos(), true); else plU
 const fmtT = sec => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 function plUi() {
   const bar = $('#playerbar'); if (!bar || bar.hidden) return;
-  const d = PL.data, s = PL.song;
+  const d = PL.data, s = PL.song; $('#pl-piano-modes').hidden = !isPiano(s) || !d;
   $('#pl-title').innerHTML = s ? `${s.num ? `<b>${numLabel(s.num)}</b> ` : ''}${esc(s.title)}` : '';
   bar.classList.toggle('nodata', !d);
   if (!d) return;
@@ -1807,10 +1827,12 @@ function plUi() {
   $('#pl-time').textContent = `${fmtT(p * bs)} / ${fmtT(d.len * bs)}`;
   $('#pl-bpm').textContent = Math.round(plBpm());
   const tr = plTr(); $('#pl-tr').textContent = tr ? (tr > 0 ? '+' + tr : String(tr)) : '0';
-  document.querySelectorAll('#playerbar [data-voice]').forEach(b => { const v = +b.dataset.voice; b.hidden = v >= (d.voices || 4); b.setAttribute('aria-pressed', voiceOn(v)); b.classList.toggle('solo', S.settings.solo === v); });
+  document.querySelectorAll('#playerbar [data-voice]').forEach(b => { const v = +b.dataset.voice; b.hidden = v >= (d.voices || 4); b.setAttribute('aria-pressed', voiceOn(v)); b.classList.toggle('solo', voicePrefs().solo === v); b.textContent = voiceName(v); b.setAttribute('aria-label', isPiano(s) ? ['Melodija', 'Spremljava desne roke', 'Leva roka'][v] || voiceName(v) : 'Glas ' + voiceName(v)); });
+  $('#pl-piano-modes').hidden = !isPiano(s);
+  document.querySelectorAll('[data-pianomode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.pianomode === 'melody' ? voiceOn(0) && !voiceOn(1) && !voiceOn(2) : [0,1,2].every(voiceOn)));
   $('#pl-loop').setAttribute('aria-pressed', !!S.settings.loop);
   $('#pl-follow').setAttribute('aria-pressed', S.settings.follow !== false);
-  $('#pl-src').textContent = d.src === 'omr' ? `Prebrano samodejno iz not${d.bad ? ` · ${d.bad} ${d.bad === 1 ? 'takt' : 'taktov'} morda napačnih` : ''}` : d.src === 'file' ? 'Iz tvoje datoteke MusicXML' : '';
+  $('#pl-src').textContent = d.src === 'piano' ? 'Klavirski prepis · Melodija / spremljava desne roke / leva roka' : d.src === 'omr' ? `Prebrano samodejno iz not${d.bad ? ` · ${d.bad} ${d.bad === 1 ? 'takt' : 'taktov'} morda napačnih` : ''}` : d.src === 'file' ? 'Iz tvoje datoteke MusicXML' : '';
 }
 function openPlayer(s) {
   if (PL.song && s && PL.song.key !== s.key) plStop();
@@ -1874,6 +1896,7 @@ function zStatus(d) {
 }
 function zRow(s) {
   const d = songDoc(s); if (!d) return '';
+  if (isPiano(s)) return pianoRow(s);
   return `<li class="row"><button class="row-main" data-open="${esc(s.key)}"><span class="num">♪</span>
     <span class="tt"><b>${esc(s.title)}</b><span>${s.comp ? esc(s.comp) + ' · ' : ''}${d.pages} ${d.pages === 1 ? 'stran' : 'strani'} · ${esc(zStatus(d))}</span></span></button>
     <button class="star" data-zmenu="${d.id}" aria-label="Možnosti za ${esc(s.title)}"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></li>`;
@@ -2082,7 +2105,7 @@ const ghCfg = () => S.settings.gh || {};
 async function gh(path, opt = {}) {
   const c = ghCfg();
   const url = `https://api.github.com/repos/${(c.repo || '').trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/+$/, '')}` + (path ? '/' + path : '');
-  return fetch(url, { method: opt.method || 'GET', body: opt.body, headers: { Authorization: `Bearer ${c.token}`, Accept: opt.raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' } });
+  return fetch(url, { signal: opt.signal, method: opt.method || 'GET', body: opt.body, headers: { Authorization: `Bearer ${c.token}`, Accept: opt.raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' } });
 }
 const blobB64 = blob => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
 async function zUpload(d) {
@@ -2157,7 +2180,7 @@ function zSetup() {
       if (b.hasAttribute('data-ok')) {
         S.settings.gh = { repo: m.querySelector('[data-repo]').value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/+$/, ''), token: m.querySelector('[data-tok]').value.replace(/[^\x21-\x7E]/g, '') }; saveMeta();
         const st = m.querySelector('[data-st]'); st.textContent = 'Preizkušam …';
-        try { const r = await gh(''); st.textContent = r.ok ? '✓ Povezava deluje.' : r.status === 404 ? 'Repozitorija ni ali ključ nima dostopa do njega.' : r.status === 401 ? 'Ključ ni veljaven.' : 'Napaka ' + r.status; if (r.ok) { setTimeout(() => { close(); render(); zPoll(); }, 700); } }
+        try { const r = await gh(''); st.textContent = r.ok ? '✓ Povezava deluje.' : r.status === 404 ? 'Repozitorija ni ali ključ nima dostopa do njega.' : r.status === 401 ? 'Ključ ni veljaven.' : 'Napaka ' + r.status; if (r.ok) { setTimeout(() => { close(); render(); zPoll(); pianoSync(true); }, 700); } }
         catch (err) { st.textContent = navigator.onLine ? 'Povezava ni uspela: ' + (err && err.message || err) : 'Ni povezave z internetom.'; }
       }
     });
@@ -2248,7 +2271,8 @@ function missingNotice() {
 }
 function render() {
   document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.tab === S.tab));
-  $('#cnt-all').textContent = S.songs.length;
+  $('#cnt-all').textContent = S.songs.filter(s => s.src !== 'zbor' && !isPiano(s)).length;
+  $('#cnt-piano').textContent = pianoDocs().length || '';
   $('#cnt-fav').textContent = S.favs.size || '';
   $('#qclear').hidden = !S.q;
   const loaded = Object.keys(BOOKS).filter(b => bookDoc(b)).length;
@@ -2266,16 +2290,17 @@ function render() {
       if (rec.length) h += `<div class="section-head"><h2>Nazadnje odprto</h2></div><div class="recent">${rec.map(s => `<button data-open="${esc(s.key)}"><span class="n">${numLabel(s.num) || '·'}</span><span class="t">${esc(s.title)}</span></button>`).join('')}</div>`;
       h += popularHtml();
       h += `<div class="section-head"><h2>Kazalo</h2><div class="chips"><button class="chip" data-sort="sec" aria-pressed="${S.sort === 'sec'}">Po sklopih</button><button class="chip" data-sort="num" aria-pressed="${S.sort === 'num'}">Po številki</button><button class="chip" data-sort="abc" aria-pressed="${S.sort === 'abc'}">Po abecedi</button></div></div>`;
-      h += S.sort === 'sec' ? sectionsHtml() : listHtml(S.songs.filter(s => s.src !== 'zbor').sort(cmpSong));
+      h += S.sort === 'sec' ? sectionsHtml() : listHtml(S.songs.filter(s => s.src !== 'zbor' && !isPiano(s)).sort(cmpSong));
     }
   } else if (S.tab === 'fav') {
     let fav = S.songs.filter(s => S.favs.has(s.key));
-    if (S.q) { const r = new Set(search(S.q)); fav = fav.filter(s => r.has(s)); }
+    if (S.q) { const nq = norm(S.q); fav = fav.filter(s => nq.split(' ').every(t => (s.n + ' ' + s.cn).includes(t))); }
     fav.sort(cmpSong);
     h += `<div class="section-head"><h2>Priljubljene${fav.length ? `<em>${fav.length}</em>` : ''}</h2></div>`;
     h += fav.length ? listHtml(fav) : `<div class="empty"><strong>${S.q ? 'Med priljubljenimi ni zadetkov' : 'Še ni priljubljenih pesmi'}</strong>Tapni zvezdico ob pesmi na seznamu ali med branjem, pa se pesem pojavi tukaj.</div>`;
   } else if (S.tab === 'mass') h += massHtml();
   else if (S.tab === 'zbor') h += zborHtml();
+  else if (S.tab === 'piano') h += pianoHtml();
   else h += booksHtml();
   content.innerHTML = h;
 }
@@ -2290,7 +2315,7 @@ function booksHtml() {
       ${d ? (d.status === 'busy' ? `<span class="status busy">Nalagam …</span>` : `<span class="status ok">Naložena</span><div class="meta">${esc(d.name)} · ${(d.size / 1048576).toFixed(1)} MB</div>`) : `<span class="status no">Ni naložena</span>`}
       <div class="actions">${d ? `<button class="btn" data-openbook="${d.id}">Odpri</button><button class="btn danger" data-del="${d.id}">Odstrani</button>` : `<button class="btn primary" data-add>Dodaj PDF ${b}</button>`}</div></div>`;
   }
-  for (const d of S.docs.filter(d => !d.book && !d.zbor)) {
+  for (const d of S.docs.filter(d => !d.book && !d.zbor && !d.piano)) {
     h += `<div class="book"><h3>${esc(d.name)}</h3><div class="meta">${d.pages || '?'} strani · ${d.songs.length} naslovov</div>
       ${d.status === 'busy' ? `<span class="status busy" data-progress="${d.id}">Iščem naslove …</span>` : `<span class="status ok">Naložena</span>`}
       <div class="actions"><button class="btn" data-openbook="${d.id}">Odpri</button><button class="btn danger" data-del="${d.id}">Odstrani</button></div></div>`;
@@ -2319,17 +2344,20 @@ const qEl = $('#q');
 let qTimer = 0;
 qEl.addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => { S.q = qEl.value.trim(); S.limit = 200; if (S.tab === 'books' || S.tab === 'mass') S.tab = 'all'; render(); $('#scroll').scrollTop = 0; }, 80); });
 qEl.addEventListener('keydown', e => {
-  if (e.key === 'Enter') { const s = (S.q ? search(S.q) : []).find(x => songDoc(x)); if (s) { qEl.blur(); openSong(s); } }
+  if (e.key === 'Enter') { const results = S.tab === 'piano' ? S.songs.filter(s => isPiano(s) && (s.n + ' ' + s.cn).includes(norm(S.q))) : search(S.q); const s = (S.q ? results : []).find(x => songDoc(x)); if (s) { qEl.blur(); openSong(s); } }
   if (e.key === 'Escape') { qEl.value = ''; S.q = ''; render(); }
 });
 $('#qclear').addEventListener('click', () => { qEl.value = ''; S.q = ''; render(); qEl.focus(); });
 document.querySelector('.tabs').addEventListener('click', e => {
   const t = e.target.closest('.tab'); if (!t) return;
   S.tab = t.dataset.tab; S.limit = 200; render(); $('#scroll').scrollTop = 0;
+  if (S.tab === 'piano' && !pianoDocs().length && !PIANO.error) pianoSync();
 });
 const armed = new WeakMap();
 content.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
+  if (b.hasAttribute('data-pianosync')) { pianoSync(true); return; }
+  if (b.dataset.pianoplay) { pianoPlay(b.dataset.pianoplay); return; }
   if (b.dataset.fav) { toggleFav(b.dataset.fav); return; }
   if (b.dataset.open) { const s = S.songs.find(x => x.key === b.dataset.open); if (s) openSong(s); return; }
   if (b.hasAttribute('data-add')) { $('#file').click(); return; }
@@ -2896,19 +2924,20 @@ $('#pl-loop').addEventListener('click', () => { S.settings.loop = !S.settings.lo
 $('#pl-follow').addEventListener('click', () => { S.settings.follow = S.settings.follow === false; saveMeta(); plUi(); toast(S.settings.follow ? 'Ob listanju se zaigra pesem na novi strani' : 'Ob listanju predvajanje ostane pri tej pesmi'); });
 $('#pl-load').addEventListener('click', () => $('#xmlfile').click());
 ['#zcam', '#zfile'].forEach(sel => $(sel).addEventListener('change', e => { const fs = [...(e.target.files || [])]; e.target.value = ''; zAddFiles(fs); }));
-window.addEventListener('online', () => zPoll());
+window.addEventListener('online', () => { zPoll(); pianoSync(); });
 $('#notesfile').addEventListener('change', async e => { const fs = [...(e.target.files || [])]; e.target.value = ''; for (const f of fs) await importNotesPack(f); });
 $('#xmlfile').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f && PL.song) importSongXml(f, PL.song).then(() => { PL.data = notesFor(PL.song); plUi(); }); });
 $('#playerbar').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || !PL.song) return;
+  if (b.dataset.pianomode && isPiano(PL.song)) { pianoMode(b.dataset.pianomode); return; }
   if (b.dataset.bpm) { const t = S.settings.tempo = S.settings.tempo || {}; const pos = curPos(); t[PL.song.key] = Math.max(30, Math.min(200, Math.round(plBpm()) + +b.dataset.bpm)); saveMeta(); if (PL.playing) plSeek(pos, true); else plUi(); }
   if (b.dataset.tr) { S.settings.transpose = Math.max(-7, Math.min(7, plTr() + +b.dataset.tr)); saveMeta(); plRestartIfPlaying(); }
   if (b.dataset.voice) {
-    const v = +b.dataset.voice; const m = new Set(S.settings.mute || []);
+    const v = +b.dataset.voice; const prefs = voicePrefs(); const m = new Set(prefs.mute || []);
     if (b._lp) { b._lp = false; return; }
     if (m.has(v)) m.delete(v); else m.add(v);
     if (m.size >= (PL.data?.voices || 4)) m.delete(v);
-    S.settings.mute = [...m]; saveMeta(); plRestartIfPlaying();
+    prefs.mute = [...m]; saveMeta(); plRestartIfPlaying();
   }
   showChrome();
 });
@@ -2916,7 +2945,7 @@ $('#playerbar').addEventListener('click', e => {
 $('#playerbar').addEventListener('pointerdown', e => {
   const b = e.target.closest('[data-voice]'); if (!b) return;
   const v = +b.dataset.voice; clearTimeout(b._t);
-  b._t = setTimeout(() => { b._lp = true; S.settings.solo = S.settings.solo === v ? null : v; saveMeta(); plRestartIfPlaying(); toast(S.settings.solo === v ? `Poudarjen glas ${VOICE_NAMES[v]}` : 'Vsi glasovi enako glasni'); }, 550);
+  b._t = setTimeout(() => { b._lp = true; const prefs = voicePrefs(); prefs.solo = prefs.solo === v ? null : v; saveMeta(); plRestartIfPlaying(); toast(prefs.solo === v ? `Poudarjen glas ${voiceName(v)}` : 'Vsi glasovi enako glasni'); }, 550);
 });
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => $('#playerbar').addEventListener(t, e => { const b = e.target.closest('[data-voice]'); if (b) clearTimeout(b._t); }));
 $('#r-pdf').addEventListener('click', () => {
@@ -2977,6 +3006,8 @@ async function wakeOn() { try { if (navigator.wakeLock && !R.wake) { R.wake = aw
 function wakeOff() { try { R.wake?.release(); } catch {} R.wake = null; }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && R.open && S.settings.keepAwake) wakeOn(); });
 
+const { PIANO, isPiano, pianoDocs, validPianoData, pianoRow, pianoHtml, pianoSync, pianoPlay, pianoMode } = createPiano({ S, DB, songDoc, esc, ICON_PLAY, ICON_STAR, ghCfg, norm, coll, gh, render, memFiles, pdfCache, buildSongs, toast, audio, openSong, openPlayer, PL, plStart, voicePrefs, saveMeta, plRestartIfPlaying, showChrome });
+
 /* ---------------- boot ---------------- */
 async function boot() {
   let meta = LS.get('meta', null);
@@ -2996,7 +3027,7 @@ async function boot() {
   if (!S.settings.zRep1) { for (const d of S.docs.filter(d => d.zbor && S.notes['z:' + d.id] && (d.omr || {}).state === 'done')) { d.omr = { state: 'wait', re: 1 }; saveDoc(d); } S.settings.zRep1 = 1; saveMeta(); }
   try { buildSongs(); render(); }
   catch (e) { if (S.tab !== 'all' || S.planId) { S.tab = 'all'; S.planId = null; try { render(); } catch (e2) { bootFail(e2); } } else bootFail(e); }
-  unlockNotes(); setTimeout(zPoll, 1500);
+  unlockNotes(); setTimeout(zPoll, 1500); setTimeout(() => pianoSync(), 1800);
   try { navigator.storage?.persist?.().catch(() => {}); } catch {}
   if (!window.pdfjsLib) toast('Pregledovalnik PDF se ni naložil. Preveri povezavo in osveži stran.');
 }

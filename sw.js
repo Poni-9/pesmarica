@@ -1,7 +1,7 @@
 // Pesmarica: service worker, da aplikacija deluje brez interneta.
-const CACHE = 'pesmarica-v17';
+const CACHE = 'pesmarica-v18-klavir';
 const STATIC = 'pesmarica-static'; // pisave in knjižnice: ostanejo med posodobitvami
-const CORE = ['./', './index.html', './manifest.webmanifest', './pdf.min.js', './pdf.worker.min.js', './pdf-lib.min.js', './icon-192.png', './icon-512.png'];
+const CORE = ['./', './index.html', './piano.js', './manifest.webmanifest', './pdf.min.js', './pdf.worker.min.js', './pdf-lib.min.js', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
