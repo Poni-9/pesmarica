@@ -1,5 +1,5 @@
 // Pesmarica: service worker, da aplikacija deluje brez interneta.
-const CACHE = 'pesmarica-v18-klavir';
+const CACHE = 'pesmarica-v19-klavir-avtorji';
 const STATIC = 'pesmarica-static'; // pisave in knjižnice: ostanejo med posodobitvami
 const CORE = ['./', './index.html', './piano.js', './manifest.webmanifest', './pdf.min.js', './pdf.worker.min.js', './pdf-lib.min.js', './icon-192.png', './icon-512.png'];
 

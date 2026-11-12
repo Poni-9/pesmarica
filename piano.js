@@ -14,6 +14,9 @@ function pianoRow(s) {
   const d = songDoc(s), fav = S.favs.has(s.key);
   return `<li class="row piano-row"><button class="row-main" data-open="${esc(s.key)}"><span class="num" aria-hidden="true">♪</span><span class="tt"><b>${esc(s.title)}</b><span>${esc(s.comp)} · ${d.pages} ${d.pages === 1 ? 'stran' : 'strani'}</span><span class="piano-info">${esc(d.info || '')}</span></span></button><button class="star" data-pianoplay="${esc(s.key)}" aria-label="Zaigraj ${esc(s.title)}">${ICON_PLAY}</button><button class="star" data-fav="${esc(s.key)}" aria-pressed="${fav}" aria-label="${fav ? 'Odstrani iz priljubljenih' : 'Dodaj med priljubljene'}">${ICON_STAR(fav)}</button></li>`;
 }
+function pianoAuthor(s) {
+  return (s.comp || '').split('·')[0].trim() || 'Drugi avtorji';
+}
 function pianoHtml() {
   const docs = pianoDocs(), connected = !!ghCfg().token, q = norm(S.q || '');
   const list = docs.map(pianoSong).filter(Boolean).filter(s => !q || q.split(' ').every(t => (s.n + ' ' + s.cn).includes(t))).sort((a,b) => coll.compare(a.title,b.title));
@@ -23,7 +26,17 @@ function pianoHtml() {
   if (PIANO.error) h += `<div class="notice" role="alert"><p>${esc(PIANO.error)}</p></div>`;
   if (!docs.length && !PIANO.syncing) h += `<div class="empty"><strong>Note za klavir še niso prenesene</strong>Tapni »Prenesi note in melodije«. PDF in melodija se shranita skupaj.</div>`;
   else if (!list.length && q) h += '<div class="empty">Ni zadetkov.</div>';
-  else h += `<ul class="list">${list.map(pianoRow).join('')}</ul>`;
+  else {
+    const authors = new Map();
+    for (const s of list) {
+      const author = pianoAuthor(s);
+      if (!authors.has(author)) authors.set(author, []);
+      authors.get(author).push(s);
+    }
+    h += [...authors.entries()].sort(([a],[b]) => coll.compare(a,b)).map(([author,songs],i) =>
+      `<section class="piano-author" aria-labelledby="piano-author-${i}"><div class="section-head"><h3 id="piano-author-${i}">${esc(author)}<em>${songs.length}</em></h3></div><ul class="list">${songs.map(pianoRow).join('')}</ul></section>`
+    ).join('');
+  }
   return h;
 }
 async function pianoResponse(path) {

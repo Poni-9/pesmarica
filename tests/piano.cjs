@@ -16,9 +16,10 @@ function blankPdf() {
   return Buffer.from(s + `trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n${start}\n%%EOF\n`);
 }
 const notes = {v:1, inst:'piano', src:'piano', bpm:100, voices:3, voiceNames:['Melodija','Desna','Leva'], len:8, ev:[[0,1,72,0],[0,1,64,1],[0,2,48,2],[2,1,74,0],[2,1,65,1],[2,2,50,2],[4,1,76,0],[4,1,67,1],[4,2,52,2]]};
-const fixture = {v:1,scores:Array.from({length:7},(_,i)=>({id:`piano-test-${i}`,title:`Piano test ${i}`,comp:'Test',info:'Synthetic test score.',pages:1,version:'one',pdf:`piano/scores/piano-test-${i}.pdf`,playback:`piano/scores/piano-test-${i}.json`,musicxml:`piano/scores/piano-test-${i}.musicxml`}))};
+const fixture = {v:1,scores:Array.from({length:7},(_,i)=>({id:`piano-test-${i}`,title:`Piano test ${i}`,comp:['Test author A','Test author B · added ending','Test author C'][i%3],info:'Synthetic test score.',pages:1,version:'one',pdf:`piano/scores/piano-test-${i}.pdf`,playback:`piano/scores/piano-test-${i}.json`,musicxml:`piano/scores/piano-test-${i}.musicxml`}))};
 const assets = process.env.PIANO_ASSETS;
 const manifest = assets ? JSON.parse(fs.readFileSync(path.join(assets,'piano/scores.json'))) : fixture;
+const total = manifest.scores.length;
 const asset = p => assets ? fs.readFileSync(path.join(assets,p)) : p.endsWith('.pdf') ? blankPdf() : Buffer.from(JSON.stringify(notes));
 const moduleContext = {createPiano:null}; vm.createContext(moduleContext); vm.runInContext(fs.readFileSync(path.join(root,'piano.js'),'utf8'),moduleContext);
 const valid = moduleContext.createPiano({}).validPianoData;
@@ -58,18 +59,31 @@ for (const score of manifest.scores) assert(valid(JSON.parse(asset(score.playbac
    // Clear the boot-created meta record so the fixture is read on the next load.
    await page.evaluate(()=>new Promise((resolve,reject)=>{const q=indexedDB.open('pesmarica',2);q.onsuccess=()=>{const t=q.result.transaction('meta','readwrite');t.objectStore('meta').delete('main');t.oncomplete=()=>{q.result.close();resolve();};t.onerror=reject;};}));
    console.log('Checking atomic failed import');failures=true;await page.reload();await page.click('#tab-piano');
-   await page.waitForFunction(()=>document.querySelectorAll('.piano-row').length===6);
+   await page.waitForFunction(n=>document.querySelectorAll('.piano-row').length===n,total-1);
    assert.match(await page.locator('#content').innerText(),/Prenos ni popoln/);
    const dbItems=()=>page.evaluate(()=>new Promise(r=>{const q=indexedDB.open('pesmarica',2);q.onsuccess=()=>{const t=q.result.transaction(['docs','files']);const d=t.objectStore('docs').getAll();const f=t.objectStore('files').getAllKeys();t.oncomplete=()=>{r({docs:d.result,files:f.result});q.result.close();};};}));
    let stored=await dbItems();assert(!stored.files.includes(manifest.scores[0].id),'failed import must not leave an orphan PDF');
-   console.log('Checking retry and seven scores');failures=false;await page.click('[data-pianosync]');await page.waitForFunction(()=>document.querySelectorAll('.piano-row').length===7);
-   assert.equal((await dbItems()).docs.filter(d=>d.piano).length,7);
+   console.log('Checking retry and all scores');failures=false;await page.click('[data-pianosync]');await page.waitForFunction(n=>document.querySelectorAll('.piano-row').length===n,total);
+   assert.equal((await dbItems()).docs.filter(d=>d.piano).length,total);
    await page.click('[data-pianosync]');await page.waitForFunction(()=>!document.querySelector('[data-pianosync]').disabled);
-   assert.equal((await dbItems()).docs.filter(d=>d.piano).length,7,'repeat sync is idempotent');
+   assert.equal((await dbItems()).docs.filter(d=>d.piano).length,total,'repeat sync is idempotent');
    await page.click('#tab-zbor');assert.equal(await page.locator('.piano-row').count(),0);
    await page.click('#tab-all');assert.equal(await page.locator('.piano-row').count(),0);
    assert.equal(await page.locator('#cnt-all').innerText(),'518');
    await page.click('#tab-piano');
+   console.log('Checking author groups and author search');
+   const authorCounts=new Map();
+   for(const score of manifest.scores){const author=score.comp.split('·')[0].trim()||'Drugi avtorji';authorCounts.set(author,(authorCounts.get(author)||0)+1);}
+   assert.equal(await page.locator('.piano-author').count(),authorCounts.size);
+   for(const group of await page.locator('.piano-author').all()){
+     const heading=await group.locator('h3').evaluate(h=>h.childNodes[0].textContent);
+     assert.equal(await group.locator('.piano-row').count(),authorCounts.get(heading));
+   }
+   const author=manifest.scores[0].comp.split('·')[0].trim();
+   await page.fill('#q',author);await page.waitForTimeout(150);
+   assert.equal(await page.locator('.piano-author').count(),1);
+   assert.equal(await page.locator('.piano-row').count(),authorCounts.get(author));
+   await page.click('#qclear');
    console.log('Checking all PDF readers and playback');for (const [i,score] of manifest.scores.entries()) {
      console.log('Opening',score.id);await page.click(`[data-pianoplay="p:${score.id}"]`);
      await page.waitForFunction(()=>document.querySelector('#spin').hidden && document.querySelectorAll('.pv canvas:not(.ink)').length>0).catch(async e=>{console.log(await page.locator('body').innerText());await page.screenshot({path:'/tmp/piano-failure.png'});throw e;});
@@ -100,10 +114,10 @@ for (const score of manifest.scores) assert(valid(JSON.parse(asset(score.playbac
    for(const selector of ['#pl-piano-modes','[data-voice="0"]','[data-voice="2"]']){const box=await page.locator(selector).boundingBox();assert(box.x>=0 && box.x+box.width<=394 && box.y+box.height<=852,selector+' mobile bounds');}
    const bounds=await page.locator('#playerbar .vb:visible').evaluateAll(bs=>bs.map(b=>{const r=b.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height,overflow:b.scrollWidth>b.clientWidth+1};}));for(let i=0;i<bounds.length;i++){assert(!bounds[i].overflow,'voice label fits');for(let j=i+1;j<bounds.length;j++){const a=bounds[i],b=bounds[j];assert(a.x+a.w<=b.x+1||b.x+b.w<=a.x+1||a.y+a.h<=b.y+1||b.y+b.h<=a.y+1,'voice buttons do not overlap');}}assert(!/^-/.test(await page.locator('#pl-time').innerText()),'initial clock is nonnegative');await page.screenshot({path:'/tmp/piano-player-mobile.png'});await page.click('#r-back');
    await page.evaluate(()=>navigator.serviceWorker.ready);await page.waitForFunction(()=>!!navigator.serviceWorker.controller);
-   console.log('Checking offline restart');await context.setOffline(true);await page.reload();await page.click('#tab-piano');assert.equal(await page.locator('.piano-row').count(),7);
+   console.log('Checking offline restart');await context.setOffline(true);await page.reload();await page.click('#tab-piano');assert.equal(await page.locator('.piano-row').count(),total);
    await page.click(`[data-pianoplay="p:${first.id}"]`);await page.waitForFunction(()=>document.querySelectorAll('.pv canvas:not(.ink)').length>0);assert.equal(await page.locator('#pl-play').getAttribute('aria-label'),'Ustavi');
    assert.deepEqual(errors,[]);
-   console.log(JSON.stringify({passed:true,collection:assets?'private seven scores':'synthetic seven scores',scores:7,offline:true,atomicImport:true,playback:true,mobile:true,errors}));
+   console.log(JSON.stringify({passed:true,collection:assets?'private scores':'synthetic scores',scores:total,offline:true,atomicImport:true,playback:true,mobile:true,errors}));
    await context.close();
  } finally {await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});
