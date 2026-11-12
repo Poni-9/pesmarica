@@ -2294,7 +2294,7 @@ function render() {
     }
   } else if (S.tab === 'fav') {
     let fav = S.songs.filter(s => S.favs.has(s.key));
-    if (S.q) { const nq = norm(S.q); fav = fav.filter(s => nq.split(' ').every(t => (s.n + ' ' + s.cn).includes(t))); }
+    if (S.q) { const matches = new Set(search(S.q)), nq = norm(S.q); fav = fav.filter(s => matches.has(s) || ((isPiano(s) || s.src === 'zbor') && nq.split(' ').every(t => (s.n + ' ' + s.cn).includes(t)))); }
     fav.sort(cmpSong);
     h += `<div class="section-head"><h2>Priljubljene${fav.length ? `<em>${fav.length}</em>` : ''}</h2></div>`;
     h += fav.length ? listHtml(fav) : `<div class="empty"><strong>${S.q ? 'Med priljubljenimi ni zadetkov' : 'Še ni priljubljenih pesmi'}</strong>Tapni zvezdico ob pesmi na seznamu ali med branjem, pa se pesem pojavi tukaj.</div>`;
@@ -2344,7 +2344,7 @@ const qEl = $('#q');
 let qTimer = 0;
 qEl.addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => { S.q = qEl.value.trim(); S.limit = 200; if (S.tab === 'books' || S.tab === 'mass') S.tab = 'all'; render(); $('#scroll').scrollTop = 0; }, 80); });
 qEl.addEventListener('keydown', e => {
-  if (e.key === 'Enter') { const results = S.tab === 'piano' ? S.songs.filter(s => isPiano(s) && (s.n + ' ' + s.cn).includes(norm(S.q))) : search(S.q); const s = (S.q ? results : []).find(x => songDoc(x)); if (s) { qEl.blur(); openSong(s); } }
+  if (e.key === 'Enter') { const results = ['piano', 'fav'].includes(S.tab) ? S.songs.filter(s => (S.tab === 'piano' ? isPiano(s) : S.favs.has(s.key)) && norm(S.q).split(' ').every(t => (s.n + ' ' + s.cn + ' ' + s.num).includes(t))) : search(S.q); const s = (S.q ? results : []).find(x => songDoc(x)); if (s) { qEl.blur(); openSong(s); } }
   if (e.key === 'Escape') { qEl.value = ''; S.q = ''; render(); }
 });
 $('#qclear').addEventListener('click', () => { qEl.value = ''; S.q = ''; render(); qEl.focus(); });
