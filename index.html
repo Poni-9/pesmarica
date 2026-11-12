@@ -160,6 +160,9 @@ button { cursor: pointer; }
 .playerbar .pl-play { width: 54px; height: 54px; border-radius: 50%; border: 0; background: var(--glass-gold); color: #1b1608; display: grid; place-items: center; flex: none; }
 .playerbar .pl-play svg { width: 26px; height: 26px; }
 .playerbar input[type=range] { flex: 1; min-width: 80px; accent-color: var(--glass-gold); height: 30px; }
+.piano-row .row-main { grid-template-columns: 28px minmax(0, 1fr); gap: 10px; }
+.piano-row .star { flex-basis: 44px; }
+.piano-row [data-pianoplay] { color: var(--gold); }
 .piano-row .piano-info { font-size: 12px; line-height: 1.4; opacity: .85; white-space: normal; }
 .playerbar #pl-piano-modes, .playerbar [aria-label="Glasovi"] { flex-wrap: wrap; }
 .playerbar .pl-time { font-variant-numeric: tabular-nums; font-size: 13px; opacity: .75; white-space: nowrap; }
