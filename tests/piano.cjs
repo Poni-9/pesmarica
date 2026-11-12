@@ -16,7 +16,7 @@ function blankPdf() {
   return Buffer.from(s + `trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n${start}\n%%EOF\n`);
 }
 const notes = {v:1, inst:'piano', src:'piano', bpm:100, voices:3, voiceNames:['Melodija','Desna','Leva'], len:8, ev:[[0,1,72,0],[0,1,64,1],[0,2,48,2],[2,1,74,0],[2,1,65,1],[2,2,50,2],[4,1,76,0],[4,1,67,1],[4,2,52,2]]};
-const fixture = {v:1,scores:Array.from({length:7},(_,i)=>({id:`piano-test-${i}`,title:`Piano test ${i}`,comp:['Test author A','Test author B · added ending','Test author C'][i%3],info:'Synthetic test score.',pages:1,version:'one',pdf:`piano/scores/piano-test-${i}.pdf`,playback:`piano/scores/piano-test-${i}.json`,musicxml:`piano/scores/piano-test-${i}.musicxml`}))};
+const fixture = {v:1,scores:Array.from({length:7},(_,i)=>({id:`piano-test-${i}`,title:`Piano test ${i}`,comp:['Ana Novak','Boris Kralj · added ending','Cilka Kovač'][i%3],info:'Synthetic test score.',pages:1,version:'one',pdf:`piano/scores/piano-test-${i}.pdf`,playback:`piano/scores/piano-test-${i}.json`,musicxml:`piano/scores/piano-test-${i}.musicxml`}))};
 const assets = process.env.PIANO_ASSETS;
 const manifest = assets ? JSON.parse(fs.readFileSync(path.join(assets,'piano/scores.json'))) : fixture;
 const total = manifest.scores.length;
