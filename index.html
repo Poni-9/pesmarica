@@ -2473,7 +2473,7 @@ async function openReader(docId, page) {
   const doc = S.docs.find(d => d.id === docId); if (!doc) return;
   if (S.settings.autoFs) enterFs();
   if (R.doc !== doc) { R.focus = R.focus && songDoc(R.focus) === doc ? R.focus : null; }
-  R.doc = doc; R.page = page; R.open = true; R.views.clear(); R.undo = [];
+  R.doc = doc; R.page = page; R.open = true; R.openId = (R.openId || 0) + 1; R.views.clear(); R.undo = [];
   [slotPrev, slotCur, slotNext].forEach(s => { s.replaceChildren(); delete s.dataset.start; });
   resetReaderPos(); reader.hidden = false; $('#spin').hidden = false;
   if (location.hash !== '#beri') { R.pushed = true; location.hash = 'beri'; }
@@ -2495,7 +2495,7 @@ function hideReader() {
   render();
 }
 function closeReader() {
-  if (R.pushed && location.hash === '#beri') { R.pushed = false; history.back(); setTimeout(() => { if (R.open) hideReader(); }, 350); }
+  if (R.pushed && location.hash === '#beri') { const openId = R.openId; R.pushed = false; history.back(); setTimeout(() => { if (R.open && R.openId === openId) hideReader(); }, 350); }
   else hideReader();
 }
 addEventListener('hashchange', () => { if (location.hash !== '#beri' && R.open) { R.pushed = false; hideReader(); } });

@@ -49,7 +49,7 @@ for (const score of manifest.scores) assert(valid(JSON.parse(asset(score.playbac
      return route.fulfill({status:404,body:'not found'});
    });
    await context.route(/https:\/\/(fonts|cdnjs)\./,r=>r.abort());
-   const page=await context.newPage();page.setDefaultTimeout(20000);page.on('pageerror',e=>errors.push(e.message));
+   const page=await context.newPage();page.setDefaultTimeout(20000);page.on('pageerror',e=>{errors.push(e.message);console.error('Page error:',e.message);});
    console.log('Checking empty collection');await page.goto(base);await page.click('#tab-piano');
    assert.match(await page.locator('#content').innerText(),/Poveži zbirko/);
    assert.equal(await page.locator('.piano-row').count(),0);
@@ -71,8 +71,8 @@ for (const score of manifest.scores) assert(valid(JSON.parse(asset(score.playbac
    assert.equal(await page.locator('#cnt-all').innerText(),'518');
    await page.click('#tab-piano');
    console.log('Checking all PDF readers and playback');for (const [i,score] of manifest.scores.entries()) {
-     await page.click(`[data-pianoplay="p:${score.id}"]`);
-     await page.waitForFunction(()=>document.querySelector('#spin').hidden && document.querySelectorAll('.pv canvas:not(.ink)').length>0);
+     console.log('Opening',score.id);await page.click(`[data-pianoplay="p:${score.id}"]`);
+     await page.waitForFunction(()=>document.querySelector('#spin').hidden && document.querySelectorAll('.pv canvas:not(.ink)').length>0).catch(async e=>{console.log(await page.locator('body').innerText());await page.screenshot({path:'/tmp/piano-failure.png'});throw e;});
      assert.equal(await page.locator('#playerbar').isVisible(),true);
      assert.equal(await page.locator('#pl-title').innerText(),score.title);
      assert.equal(await page.locator('[data-voice="0"]').innerText(),'Melodija');
