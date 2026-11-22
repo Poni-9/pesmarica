@@ -35,3 +35,22 @@ neveljavno melodijo, ponovni prenos, vseh sedem PDF-jev, ločene glasove, tempo,
 transpozicijo, priljubljene, iskanje, telefon in ponovno odpiranje brez interneta.
 Za lokalni preizkus prave zbirke nastavi `PIANO_ASSETS` na mapo, ki vsebuje
 `piano/scores.json`. Po potrebi nastavi `CHROMIUM_PATH` na nameščeni Chromium.
+
+## Jazz
+
+Zavihek **Jazz** ima 234 lead sheetov iz zbirke *The Public Domain Song Anthology*
+(Berger, Israels; Aperio 2020, CC0): https://doi.org/10.32881/book2.
+Za razliko od pesmarice in Klavirja so te datoteke **javne** in ležijo v mapi `jazz/`:
+v Sloveniji so proste. Avtorji glasbe in besedila so umrli vsaj 70 let pred 2026 ali pa gre za ljudsko pesem.
+Izpuščenih je 114 pesmi iz zbirke, ki so pri nas še zaščitene ali imajo negotov status.
+Podrobnosti so v `jazz/README.md`.
+
+Pesem se prenese ob prvem odprtju in nato ostane v napravi. Gumb »Shrani vse« shrani vseh 234 pesmi (21 MB) za uporabo brez interneta.
+Predvajalnik je isti kot pri Klavirju. Glasovi so **Melodija**, **Akordi** in **Bas**. Akorde in bas sestavi samodejno iz akordnih oznak, zato to ni aranžma.
+
+```sh
+node tests/jazz.cjs
+```
+
+Test preveri vseh 234 PDF-jev in predvajalnih zapisov. V brskalniku preveri seznam, iskanje,
+odpiranje in predvajanje, priljubljene, »Shrani vse«, telefon in ponovni zagon brez interneta.

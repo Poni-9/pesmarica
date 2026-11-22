@@ -3,7 +3,7 @@
 function createPiano({ S, DB, songDoc, esc, ICON_PLAY, ICON_STAR, ghCfg, norm, coll, gh, render, memFiles, pdfCache, buildSongs, toast, audio, openSong, openPlayer, PL, plStart, voicePrefs, saveMeta, plRestartIfPlaying, showChrome }) {
 /* Klavir shares the PDF reader and synthesizer, with its own private score collection. */
 const PIANO = { syncing: false, progress: '', error: '', total: 0 };
-const isPiano = s => s && s.src === 'piano';
+const isPiano = s => s && (s.src === 'piano' || s.src === 'jazz'); // Jazz uses the same piano player
 const pianoDocs = () => S.docs.filter(d => d.piano);
 const pianoSong = d => S.songs.find(s => s.key === 'p:' + d.id);
 const pianoPath = path => typeof path === 'string' && /^piano\/scores\/[a-z0-9-]+\.(pdf|json|musicxml)$/.test(path);
