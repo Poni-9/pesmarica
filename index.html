@@ -342,6 +342,7 @@ button { cursor: pointer; }
         <button class="tab" role="tab" id="tab-mass" data-tab="mass" aria-selected="false">Maša</button>
         <button class="tab" role="tab" id="tab-zbor" data-tab="zbor" aria-selected="false">Zbor</button>
         <button class="tab" role="tab" id="tab-piano" data-tab="piano" aria-selected="false">Klavir <span class="cnt" id="cnt-piano"></span></button>
+      <button class="tab" role="tab" id="tab-jazz" data-tab="jazz" aria-selected="false">Jazz <span class="cnt" id="cnt-jazz"></span></button>
         <button class="tab" role="tab" id="tab-books" data-tab="books" aria-selected="false">Knjige in nastavitve</button>
       </div>
     </div>
@@ -411,6 +412,7 @@ button { cursor: pointer; }
 
 <script src="pdf.min.js"></script>
 <script src="piano.js"></script>
+<script src="jazz.js"></script>
 <script>
 (() => {
 'use strict';
@@ -1020,7 +1022,8 @@ function buildSongs() {
     list.push({ key: 'p:' + d.id, num: '', title: d.name, comp: d.comp || '', docId: d.id, book: null, page: 1, y: 0, src: 'piano' });
     if (validPianoData(d.playback)) S.notes['p:' + d.id] = d.playback;
   }
-  for (const d of S.docs.filter(d => !d.zbor && !d.piano)) for (const s of d.songs || []) {
+  list.push(...jazzSongs());
+  for (const d of S.docs.filter(d => !d.zbor && !d.piano && !d.jazz)) for (const s of d.songs || []) {
     list.push({ key: 'm:' + d.id + ':' + s.page + ':' + norm(s.title).slice(0, 24), num: '', title: s.title, comp: s.src === 'auto' ? 'najdeno v PDF' : 'dodano ročno', docId: d.id, book: d.book, page: s.page, y: 0, src: s.src });
   }
   for (const s of list) { s.n = norm(s.title); s.cn = norm(s.comp); s.nv = parseInt(s.num, 10) || 0; }
@@ -1155,6 +1158,7 @@ function locLabel(s) {
 }
 function rowHtml(s) {
   const fav = S.favs.has(s.key);
+  if (isJazz(s)) return jazzRow(s);
   if (isPiano(s)) return pianoRow(s);
   return `<li class="row"><button class="row-main" data-open="${esc(s.key)}">
     <span class="num${s.num.includes('-') ? ' range' : ''}">${numLabel(s.num)}</span>
@@ -1557,7 +1561,7 @@ function songRange(s) {
   const ck = S.songs.length + '|' + S.docs.length;
   if (rangeCache.k !== ck) rangeCache = { k: ck, m: new Map() };
   if (rangeCache.m.has(s.key)) return rangeCache.m.get(s.key);
-  if (d.zbor || d.piano) { const r = { doc: d, from: 1, to: d.pages || 1 }; rangeCache.m.set(s.key, r); return r; }
+  if (d.zbor || d.piano || d.jazz) { const r = { doc: d, from: 1, to: d.pages || 1 }; rangeCache.m.set(s.key, r); return r; }
   const list = songsOf(d); const i = list.indexOf(s);
   let end = s.page;
   for (let j = i + 1; j < list.length; j++) {
@@ -1840,7 +1844,7 @@ function plUi() {
   document.querySelectorAll('[data-pianomode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.pianomode === 'melody' ? voiceOn(0) && !voiceOn(1) && !voiceOn(2) : [0,1,2].every(voiceOn)));
   $('#pl-loop').setAttribute('aria-pressed', !!S.settings.loop);
   $('#pl-follow').setAttribute('aria-pressed', S.settings.follow !== false);
-  $('#pl-src').textContent = d.src === 'piano' ? 'Klavirski prepis · Melodija / spremljava desne roke / leva roka' : d.src === 'omr' ? `Prebrano samodejno iz not${d.bad ? ` · ${d.bad} ${d.bad === 1 ? 'takt' : 'taktov'} morda napačnih` : ''}` : d.src === 'file' ? 'Iz tvoje datoteke MusicXML' : '';
+  $('#pl-src').textContent = d.src === 'jazz' ? 'Jazz · melodija iz zapisa, akordi in bas samodejno iz akordnih oznak' : d.src === 'piano' ? 'Klavirski prepis · Melodija / spremljava desne roke / leva roka' : d.src === 'omr' ? `Prebrano samodejno iz not${d.bad ? ` · ${d.bad} ${d.bad === 1 ? 'takt' : 'taktov'} morda napačnih` : ''}` : d.src === 'file' ? 'Iz tvoje datoteke MusicXML' : '';
 }
 function openPlayer(s) {
   if (PL.song && s && PL.song.key !== s.key) plStop();
@@ -2281,6 +2285,7 @@ function render() {
   document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.tab === S.tab));
   $('#cnt-all').textContent = S.songs.filter(s => s.src !== 'zbor' && !isPiano(s)).length;
   $('#cnt-piano').textContent = pianoDocs().length || '';
+  $('#cnt-jazz').textContent = S.songs.filter(isJazz).length || '';
   $('#cnt-fav').textContent = S.favs.size || '';
   $('#qclear').hidden = !S.q;
   const loaded = Object.keys(BOOKS).filter(b => bookDoc(b)).length;
@@ -2309,6 +2314,7 @@ function render() {
   } else if (S.tab === 'mass') h += massHtml();
   else if (S.tab === 'zbor') h += zborHtml();
   else if (S.tab === 'piano') h += pianoHtml();
+  else if (S.tab === 'jazz') h += jazzHtml();
   else h += booksHtml();
   content.innerHTML = h;
 }
@@ -2323,7 +2329,7 @@ function booksHtml() {
       ${d ? (d.status === 'busy' ? `<span class="status busy">Nalagam …</span>` : `<span class="status ok">Naložena</span><div class="meta">${esc(d.name)} · ${(d.size / 1048576).toFixed(1)} MB</div>`) : `<span class="status no">Ni naložena</span>`}
       <div class="actions">${d ? `<button class="btn" data-openbook="${d.id}">Odpri</button><button class="btn danger" data-del="${d.id}">Odstrani</button>` : `<button class="btn primary" data-add>Dodaj PDF ${b}</button>`}</div></div>`;
   }
-  for (const d of S.docs.filter(d => !d.book && !d.zbor && !d.piano)) {
+  for (const d of S.docs.filter(d => !d.book && !d.zbor && !d.piano && !d.jazz)) {
     h += `<div class="book"><h3>${esc(d.name)}</h3><div class="meta">${d.pages || '?'} strani · ${d.songs.length} naslovov</div>
       ${d.status === 'busy' ? `<span class="status busy" data-progress="${d.id}">Iščem naslove …</span>` : `<span class="status ok">Naložena</span>`}
       <div class="actions"><button class="btn" data-openbook="${d.id}">Odpri</button><button class="btn danger" data-del="${d.id}">Odstrani</button></div></div>`;
@@ -2352,7 +2358,7 @@ const qEl = $('#q');
 let qTimer = 0;
 qEl.addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => { S.q = qEl.value.trim(); S.limit = 200; if (S.tab === 'books' || S.tab === 'mass') S.tab = 'all'; render(); $('#scroll').scrollTop = 0; }, 80); });
 qEl.addEventListener('keydown', e => {
-  if (e.key === 'Enter') { const results = ['piano', 'fav'].includes(S.tab) ? S.songs.filter(s => (S.tab === 'piano' ? isPiano(s) : S.favs.has(s.key)) && norm(S.q).split(' ').every(t => (s.n + ' ' + s.cn + ' ' + s.num).includes(t))) : search(S.q); const s = (S.q ? results : []).find(x => songDoc(x)); if (s) { qEl.blur(); openSong(s); } }
+  if (e.key === 'Enter') { const results = ['piano', 'jazz', 'fav'].includes(S.tab) ? S.songs.filter(s => (S.tab === 'piano' ? isPiano(s) && !isJazz(s) : S.tab === 'jazz' ? isJazz(s) : S.favs.has(s.key)) && norm(S.q).split(' ').every(t => (s.n + ' ' + s.cn + ' ' + s.num).includes(t))) : search(S.q); const s = (S.q ? results : []).find(x => songDoc(x) || isJazz(x)); if (s) { qEl.blur(); openSong(s); } }
   if (e.key === 'Escape') { qEl.value = ''; S.q = ''; render(); }
 });
 $('#qclear').addEventListener('click', () => { qEl.value = ''; S.q = ''; render(); qEl.focus(); });
@@ -2366,6 +2372,8 @@ content.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.hasAttribute('data-pianosync')) { pianoSync(true); return; }
   if (b.dataset.pianoplay) { pianoPlay(b.dataset.pianoplay); return; }
+  if (b.dataset.jazzplay) { jazzPlay(b.dataset.jazzplay); return; }
+  if (b.hasAttribute('data-jazzsync')) { jazzSync(); return; }
   if (b.dataset.fav) { toggleFav(b.dataset.fav); return; }
   if (b.dataset.open) { const s = S.songs.find(x => x.key === b.dataset.open); if (s) openSong(s); return; }
   if (b.hasAttribute('data-add')) { $('#file').click(); return; }
@@ -2471,6 +2479,7 @@ function placeSlots() { slotPrev.style.left = '-100%'; slotCur.style.left = '0';
 placeSlots();
 
 function openSong(s) {
+  if (isJazz(s) && !songDoc(s)) { jazzEnsure(s).then(ok => { if (ok) openSong(s); }); return; }
   const d = songDoc(s);
   if (!d) { toast(s.book ? `Za to pesem dodaj PDF knjige ${s.book}` : 'PDF te pesmi ni več naložen'); S.tab = 'books'; render(); return; }
   S.recent = [s.key, ...S.recent.filter(k => k !== s.key)].slice(0, 12); S.counts[s.key] = (S.counts[s.key] || 0) + 1; saveMeta();
@@ -3015,6 +3024,7 @@ function wakeOff() { try { R.wake?.release(); } catch {} R.wake = null; }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && R.open && S.settings.keepAwake) wakeOn(); });
 
 const { PIANO, isPiano, pianoDocs, validPianoData, pianoRow, pianoHtml, pianoSync, pianoPlay, pianoMode } = createPiano({ S, DB, songDoc, esc, ICON_PLAY, ICON_STAR, ghCfg, norm, coll, gh, render, memFiles, pdfCache, buildSongs, toast, audio, openSong, openPlayer, PL, plStart, voicePrefs, saveMeta, plRestartIfPlaying, showChrome });
+const { JAZZ, isJazz, jazzDocs, jazzSongs, jazzRow, jazzHtml, jazzLoad, jazzEnsure, jazzSync, jazzPlay } = createJazz({ S, DB, songDoc, esc, ICON_PLAY, ICON_STAR, norm, coll, render, memFiles, pdfCache, buildSongs, toast, audio, openSong, openPlayer, PL, plStart, validPianoData, LS });
 
 /* ---------------- boot ---------------- */
 async function boot() {
@@ -3035,7 +3045,7 @@ async function boot() {
   if (!S.settings.zRep1) { for (const d of S.docs.filter(d => d.zbor && S.notes['z:' + d.id] && (d.omr || {}).state === 'done')) { d.omr = { state: 'wait', re: 1 }; saveDoc(d); } S.settings.zRep1 = 1; saveMeta(); }
   try { buildSongs(); render(); }
   catch (e) { if (S.tab !== 'all' || S.planId) { S.tab = 'all'; S.planId = null; try { render(); } catch (e2) { bootFail(e2); } } else bootFail(e); }
-  unlockNotes(); setTimeout(zPoll, 1500); setTimeout(() => pianoSync(), 1800);
+  unlockNotes(); setTimeout(zPoll, 1500); setTimeout(() => pianoSync(), 1800); setTimeout(() => jazzLoad(), 600);
   try { navigator.storage?.persist?.().catch(() => {}); } catch {}
   if (!window.pdfjsLib) toast('Pregledovalnik PDF se ni naložil. Preveri povezavo in osveži stran.');
 }

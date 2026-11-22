@@ -1,7 +1,7 @@
 // Pesmarica: service worker, da aplikacija deluje brez interneta.
-const CACHE = 'pesmarica-v19-klavir-avtorji';
+const CACHE = 'pesmarica-v20-jazz';
 const STATIC = 'pesmarica-static'; // pisave in knjižnice: ostanejo med posodobitvami
-const CORE = ['./', './index.html', './piano.js', './manifest.webmanifest', './pdf.min.js', './pdf.worker.min.js', './pdf-lib.min.js', './icon-192.png', './icon-512.png'];
+const CORE = ['./', './index.html', './piano.js', './jazz.js', './manifest.webmanifest', './pdf.min.js', './pdf.worker.min.js', './pdf-lib.min.js', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
@@ -22,7 +22,9 @@ self.addEventListener('fetch', e => {
     e.waitUntil(net.catch(() => {}));
     return;
   }
-  if (url.origin === location.origin && url.pathname.endsWith('notes-enc.json')) {
+  // Jazz: PDF in melodije shrani aplikacija sama (IndexedDB), zato jih ne podvajamo v predpomnilniku
+  if (url.origin === location.origin && /\/jazz\/(pdf|play)\//.test(url.pathname)) return;
+  if (url.origin === location.origin && (url.pathname.endsWith('notes-enc.json') || url.pathname.endsWith('/jazz/index.json'))) {
     e.respondWith(timed(fetch(req), 6000).then(r => { if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(req, copy)); } return r; }).catch(() => caches.match(req)));
     return;
   }
